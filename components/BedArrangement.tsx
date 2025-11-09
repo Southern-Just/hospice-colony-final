@@ -185,7 +185,7 @@ export default function BedArrangement() {
 
       <div className="flex items-start justify-between gap-6">
         {/* Left Column */}
-        <div className="mx-auto w-64 space-y-4">
+        <div className="mx-auto w-64 ml-2 space-y-4">
           <h2 className="text-xl font-bold">Bed Overview</h2>
 
           <div className="grid grid-cols-2 gap-2">
@@ -217,7 +217,7 @@ export default function BedArrangement() {
 
 
           {/* Available Beds Below Simulated Beds */}
-          <div className="mt-4">
+          <div className="mt-18 -ml-2">
             <Card>
               <CardHeader>
                 <CardTitle>Available Beds After Allocation</CardTitle>

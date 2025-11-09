@@ -45,6 +45,8 @@
 
 :root {
   --radius: 0.625rem;
+  --background: oklch(1 0 89.876);
+  --foreground: oklch(0.129 0.042 264.695);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
@@ -74,8 +76,6 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
 }
 
 .dark {
@@ -119,4 +119,51 @@
   body {
     @apply bg-background text-foreground;
   }
+    .hospital-partner-modal label {
+    @apply font-bold text-gray-700;
+  }
+  /* globals.css */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE & Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+
+}
+@layer components {
+  .sonner-toast {
+    @apply max-w-[max-content] w-auto;
+  }
+
+      .bg-hospice{
+        @apply bg-cover bg-center;
+        background-image: url('/images/hospice_bg.png');
+    }
+    /* Total Beds card background */
+    .bg-total-beds {
+        @apply bg-cover bg-center;
+        background-image: url('/images/hospicehealth5.png');
+    }
+
+    /* Available Beds card background */
+    .bg-available-beds {
+        @apply bg-cover bg-center;
+        background-image: url('/images/hospicehealth2.png');
+    }
+
+    /* Occupied Beds card background */
+    .bg-occupied-beds {
+        @apply bg-cover bg-center;
+        background-image: url('/images/hospicehealth6.png');
+    }
+
+    /* Partner Hospitals card background */
+    .bg-partner-hospitals {
+        @apply bg-cover bg-center;
+        background-image: url('/images/hospicehealth4.png');
+    }
+
 }

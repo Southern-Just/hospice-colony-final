@@ -1,46 +1,66 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { HospitalIcon, MapPinIcon, BedIcon, PhoneIcon } from 'lucide-react';
 
-const mockHospitals = [
-  {
-    id: '1',
-    name: 'City General Hospital',
-    location: '123 Main St, Metropolis',
-    phone: '+1 555-1234',
-    status: 'Active',
-    totalBeds: 120,
-    availableBeds: 35,
-    specialties: ['Cardiology', 'Neurology'],
-  },
-  {
-    id: '2',
-    name: 'River Valley Clinic',
-    location: '45 River Rd, Springfield',
-    phone: '+1 555-5678',
-    status: 'Active',
-    totalBeds: 80,
-    availableBeds: 20,
-    specialties: ['Pediatrics', 'Orthopedics'],
-  },
-  {
-    id: '3',
-    name: 'Sunrise Medical Center',
-    location: '78 Sunrise Blvd, Gotham',
-    phone: '+1 555-8765',
-    status: 'Inactive',
-    totalBeds: 100,
-    availableBeds: 50,
-    specialties: ['General Surgery', 'Oncology'],
-  },
-];
+type Hospital = {
+  id: string;
+  name: string;
+  location?: string;
+  phone?: string;
+  status?: string;
+  specialties?: string[];
+  totalBeds: number;
+  availableBeds: number;
+  occupiedBeds: number;
+  maintenanceBeds?: number;
+};
 
 export function HospitalPartners() {
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [selectedWard, setSelectedWard] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHospitals = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch('/api/hospitals');
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+      const data = await response.json();
+      setHospitals(data.hospitals ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error fetching hospitals');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHospitals();
+  }, []);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-600">Loading hospitals...</p>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <p className="text-red-600">{error}</p>
+        <Button onClick={fetchHospitals}>Retry</Button>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-6 space-y-8">
@@ -51,13 +71,13 @@ export function HospitalPartners() {
             Hospitals collaborating with Hospice::Colony
           </p>
         </div>
-        <Button className="bg-blue-100 text-blue-500 hover:bg-blue-200 text-blue-500  rounded-lg px-4 py-2">
+        <Button className="bg-blue-100 text-blue-500 hover:bg-blue-200 text-blue-500 rounded-lg px-4 py-2">
           Hospice::Colony Algo. Aided Transfers
         </Button>
       </header>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {mockHospitals.map((hospital) => {
+        {hospitals.map((hospital) => {
           const ward = selectedWard[hospital.id] ?? 'General';
           const availableBedsCount = hospital.availableBeds;
           const occupiedBeds = hospital.totalBeds - availableBedsCount;
@@ -72,9 +92,11 @@ export function HospitalPartners() {
                     </div>
                     <div>
                       <CardTitle className="text-lg font-semibold">{hospital.name}</CardTitle>
-                      <p className="text-sm flex items-center gap-1 text-gray-500">
-                        <MapPinIcon className="h-3 w-3" /> {hospital.location}
-                      </p>
+                      {hospital.location && (
+                        <p className="text-sm flex items-center gap-1 text-gray-500">
+                          <MapPinIcon className="h-3 w-3" /> {hospital.location}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <Badge

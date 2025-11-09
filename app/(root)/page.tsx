@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import {
-  LayoutDashboardIcon,
   HospitalIcon,
   BedIcon,
   BarChart3Icon,
@@ -12,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
-import  BedArrangement  from "@/components/BedArrangement";
+import BedArrangement from "@/components/BedArrangement";
 import { HospitalPartners } from "@/components/HospitalPartners";
 import { Analytics } from "@/components/Analytics";
 import {
@@ -23,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/components/contexts/AuthContext";
 
 const useCountUp = (endValue: number, duration = 1000) => {
   const [count, setCount] = useState(0);
@@ -57,6 +57,7 @@ const mockStats = {
 };
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [stats, setStats] = useState({
     totalBeds: 0,
@@ -87,12 +88,12 @@ export default function HomePage() {
   const animatedPartneredHospitals = useCountUp(stats.partneredHospitals, 1200);
 
   return (
-    <div className="min-h-screen healthcare-home-bg">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-6 py-4">
+    <div className="min-h-screen">
+      <header className="border-b bg-card hospice-bg">
+        <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 cursor-pointer" onClick={()=>window.location.href = "/"}>
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                   <HospitalIcon className="w-5 h-5 text-primary-foreground" />
                 </div>
@@ -101,6 +102,11 @@ export default function HomePage() {
               <Badge variant="outline" className="hidden md:flex">
                 sajoh - Swarm Algorithm 001
               </Badge>
+              {user && (
+                <Badge variant="secondary" className="hidden lg:flex">
+                  Welcome, {user.firstName}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center space-x-3">
               <Button variant="outline" size="sm">
@@ -116,10 +122,10 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 py-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-none lg:inline-flex">
-            <TabsTrigger value="dashboard"><LayoutDashboardIcon className="w-4 h-4" /> Dashboard</TabsTrigger>
+          <TabsList className=" w-[60%] bg-green-500 inline-flex mx-auto">
+            <TabsTrigger value="dashboard">/</TabsTrigger>
             <TabsTrigger value="partners"><HospitalIcon className="w-4 h-4" /> Partners</TabsTrigger>
             <TabsTrigger value="beds"><BedIcon className="w-4 h-4" /> Bed Layout</TabsTrigger>
             <TabsTrigger value="analytics"><BarChart3Icon className="w-4 h-4" /> Analytics</TabsTrigger>
@@ -176,6 +182,11 @@ export default function HomePage() {
       <footer className="border-t bg-card mt-16">
         <div className="container mx-auto px-6 py-6 text-center text-sm text-muted-foreground">
           © 2025 Hospice Colony — Swarm-Based Bed Allocation System
+          {user && (
+            <div>
+              Logged in as: {user.firstName} {user.lastName}
+            </div>
+          )}
         </div>
       </footer>
     </div>
