@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/contexts/AuthContext";
+import { SettingsModal } from "@/components/SettingsModal";
 
 const useCountUp = (endValue: number, duration = 1000) => {
   const [count, setCount] = useState(0);
@@ -67,6 +68,8 @@ export default function HomePage() {
   });
   const [hospitals, setHospitals] = useState<any[]>([]);
   const [selectedHospital, setSelectedHospital] = useState<any>(null);
+  const [showSettings, setShowSettings] = useState(false);
+
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -106,6 +109,7 @@ export default function HomePage() {
                 <Badge variant="secondary" className="hidden lg:flex">
                   Welcome, {user.firstName}
                 </Badge>
+
               )}
             </div>
             <div className="flex items-center space-x-3">
@@ -113,10 +117,12 @@ export default function HomePage() {
                 <BellIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Alerts</span>
               </Button>
-              <Button variant="outline" size="sm">
+
+              <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
                 <SettingsIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Settings</span>
               </Button>
+             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
             </div>
           </div>
         </div>

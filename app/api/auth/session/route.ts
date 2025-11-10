@@ -1,25 +1,68 @@
-import { db } from '@/lib/database/db';
-import { sessions, users } from '@/lib/database/schema';
-import { eq } from 'drizzle-orm';
-import { cookies } from 'next/headers';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { db } from '@/lib/db'; // your Drizzle ORM instance
+import { hospitals, users } from '@/lib/schema'; // your tables
+import { getServerSession } from 'next-auth'; // or Clerk auth if using Clerk
 
-export async function GET() {
-  const token = (await cookies()).get('session_token')?.value;
-  if (!token) return Response.json({ user: null }, { status: 401 });
+type SessionResponse = {
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+    hospitalId: string;
+  } | null;
+  hospital?: any; // optional full hospital data
+};
 
-  const [session] = await db.select().from(sessions).where(eq(sessions.token, token)).limit(1);
-  if (!session) return Response.json({ user: null }, { status: 401 });
-
-  const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
-
-  return Response.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      hospitalId: user.hospitalId,
+export default async function handler(req: NextApiRequest, res: NextApiResponse<SessionResponse>) {
+  try {
+    // Get logged-in user from your auth system
+    const session = await getServerSession(req, res); // adjust if using Clerk
+    if (!session?.user?.id) {
+      return res.status(200).json({ user: null });
     }
-  });
+
+    // Fetch user from DB to get role and hospitalId
+    const user = await db.query.users.findFirst({
+      where: (u) => u.id.equals(session.user.id),
+    });
+
+    if (!user) {
+      return res.status(200).json({ user: null });
+    }
+
+    const userData = {
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      role: user.role,
+      hospitalId: user.hospital_id,
+    };
+
+    // Optionally fetch full hospital info for the user
+    let hospitalData = undefined;
+    if (user.hospital_id) {
+      const hospital = await db.query.hospitals.findFirst({
+        where: (h) => h.id.equals(user.hospital_id),
+      });
+
+      if (hospital) {
+        hospitalData = {
+          ...hospital,
+          wards: hospital.wards || [],
+          specialties: hospital.specialties || [],
+        };
+      }
+    }
+
+    return res.status(200).json({
+      user: userData,
+      hospital: hospitalData,
+    });
+  } catch (err) {
+    console.error('Session fetch error:', err);
+    return res.status(500).json({ user: null });
+  }
 }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/database/db';
 import { users, hospitals } from '@/lib/database/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "User already exists" }, { status: 400 });
     }
 
-    // Create or fetch hospital
+    // Create or find hospital
     let hospital = await db.select().from(hospitals).where(eq(hospitals.name, facility));
     let hospitalId;
 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       password: hashedPassword,
       firstName,
       lastName,
-      role: role ?? 'staff',
+      role: (role?.toLowerCase() ?? 'staff'),
       hospitalId,
     }).returning();
 

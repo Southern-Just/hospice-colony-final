@@ -1,9 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { User } from '../../lib/database/schema';
+import type { User } from '@/lib/database/schema';
+import { toast } from 'sonner';
 
 interface ExtendedUser extends Partial<User> {
+  hospitalId?: string | null;
   hospitalName?: string | null;
 }
 
@@ -11,6 +13,7 @@ interface AuthContextType {
   user: ExtendedUser | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshUser: (userId: string) => Promise<void>;
   isLoading: boolean;
   isAuthenticated: boolean;
 }
@@ -33,48 +36,77 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<ExtendedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const fetchOrCreateHospital = async (hospitalId: string | null, hospitalName?: string | null): Promise<{ id: string; name: string } | null> => {
+    try {
+      if (!hospitalId && hospitalName) {
+        const createRes = await fetch('/api/hospitals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: hospitalName }),
+        });
+        if (!createRes.ok) return null;
+        const data = await createRes.json();
+        return { id: data.hospital.id, name: data.hospital.name };
+      }
+      if (hospitalId) {
+        const res = await fetch(`/api/hospitals/${hospitalId}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return { id: data.hospital.id, name: data.hospital.name };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const refreshUser = async (userId: string) => {
+    try {
+      const userRes = await fetch(`/api/users/${userId}`);
+      if (!userRes.ok) {
+        toast.error("Failed to refresh user data.");
+        return;
+      }
+      const { user: refreshedUser } = await userRes.json();
+      let hospitalId = refreshedUser.hospitalId;
+      let hospitalName = refreshedUser.hospitalName;
+      const hospitalData = await fetchOrCreateHospital(hospitalId, hospitalName);
+      if (hospitalData) {
+        hospitalId = hospitalData.id;
+        hospitalName = hospitalData.name;
+      }
+      const userToStore = { ...refreshedUser, hospitalName, hospitalId: hospitalId || null };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('userData', JSON.stringify(refreshedUser));
+      }
+      setUser(userToStore);
+    } catch {
+      toast.error("Error refreshing profile data.");
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
         const userData = typeof window !== 'undefined' ? localStorage.getItem('userData') : null;
-
         if (token && userData) {
-          const res = await fetch('/api/auth/session', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (res.ok) {
-            const session = await res.json();
-            let parsedUser = JSON.parse(userData);
-            // handle both hospitalId and hospital_id shapes
-            const hospitalId = parsedUser.hospitalId ?? parsedUser.hospital_id ?? parsedUser.hospital?.id;
-            let hospital = null;
-            if (hospitalId) {
-              const hospitalRes = await fetch(`/api/hospitals/${hospitalId}`);
-              hospital = hospitalRes.ok ? await hospitalRes.json() : null;
-            }
-
-            setUser({
-              ...parsedUser,
-              hospitalName: hospital?.name || null,
-            });
-          } else {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userData');
-            setUser(null);
+          const parsedUser = JSON.parse(userData);
+          let hospitalId = parsedUser.hospitalId;
+          let hospitalName = parsedUser.hospitalName;
+          const hospitalData = await fetchOrCreateHospital(hospitalId, hospitalName);
+          if (hospitalData) {
+            hospitalId = hospitalData.id;
+            hospitalName = hospitalData.name;
           }
+          setUser({ ...parsedUser, hospitalName, hospitalId: hospitalId || null });
+        } else {
+          setUser(null);
         }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('userData');
-        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
-
     checkAuth();
   }, []);
 
@@ -86,33 +118,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         body: JSON.stringify({ email, password }),
         headers: { 'Content-Type': 'application/json' },
       });
-
-      if (!res.ok) {
-        return false;
-      }
-
+      if (!res.ok) return false;
       const data = await res.json();
       const { token, user: returnedUser } = data;
-      const hospitalId = returnedUser?.hospitalId ?? returnedUser?.hospital_id ?? returnedUser?.hospital?.id;
-      let hospital = null;
-      if (hospitalId) {
-        const hospitalRes = await fetch(`/api/hospitals/${hospitalId}`);
-        hospital = hospitalRes.ok ? await hospitalRes.json() : null;
+      let hospitalId = returnedUser.hospitalId;
+      let hospitalName = returnedUser.hospitalName;
+      const hospitalData = await fetchOrCreateHospital(hospitalId, hospitalName);
+      if (hospitalData) {
+        hospitalId = hospitalData.id;
+        hospitalName = hospitalData.name;
       }
-
+      const userToStore = { ...returnedUser, hospitalName, hospitalId: hospitalId || null };
       if (typeof window !== 'undefined') {
         localStorage.setItem('authToken', token);
         localStorage.setItem('userData', JSON.stringify(returnedUser));
       }
-
-      setUser({
-        ...returnedUser,
-        hospitalName: hospital?.name || null,
-      });
-
+      setUser(userToStore);
       return true;
-    } catch (error) {
-      console.error('sign in failed:', error);
+    } catch {
       return false;
     } finally {
       setIsLoading(false);
@@ -128,8 +151,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
-    } catch (err) {
-      console.error('Logout error', err);
     } finally {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('authToken');
@@ -143,13 +164,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     login,
     logout,
+    refreshUser,
     isLoading,
     isAuthenticated: !!user,
   };
 
-  return (
-      <AuthContext.Provider value={value}>
-        {children}
-      </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

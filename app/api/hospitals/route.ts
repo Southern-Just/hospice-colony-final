@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/database/db";
-import { hospitals, beds, wards } from "@/lib/database/schema";
-import { eq, sql } from "drizzle-orm";
+import { hospitals, beds } from "@/lib/database/schema";
+import { sql } from "drizzle-orm";
 
 export async function GET() {
   try {
-    const hospitalList = await db
-      .select()
-      .from(hospitals)
-      .where(sql`${hospitals.status} = 'active'`);
-
+    const hospitalList = await db.select().from(hospitals).where(sql`${hospitals.status} = 'active'`);
     const bedStats = await db
       .select({
         hospitalId: beds.hospitalId,
@@ -20,21 +16,21 @@ export async function GET() {
       })
       .from(beds)
       .groupBy(beds.hospitalId);
-
+    const bedLists = await db.select().from(beds);
     const result = hospitalList.map(h => {
       const stats = bedStats.find(b => b.hospitalId === h.id);
+      const hospitalBeds = bedLists.filter(b => b.hospitalId === h.id);
       return {
         ...h,
         totalBeds: stats?.totalBeds ?? 0,
         availableBeds: stats?.availableBeds ?? 0,
         occupiedBeds: stats?.occupiedBeds ?? 0,
         maintenanceBeds: stats?.maintenanceBeds ?? 0,
+        beds: hospitalBeds
       };
     });
-
     return NextResponse.json({ hospitals: result });
-  } catch (err) {
-    console.error("GET /hospitals error:", err);
+  } catch {
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }
@@ -54,10 +50,8 @@ export async function POST(request: NextRequest) {
       specialties: data.specialties ?? [],
       status: "active",
     }).returning();
-
     return NextResponse.json(inserted[0]);
-  } catch (err) {
-    console.error("POST /hospitals error:", err);
+  } catch {
     return NextResponse.json({ error: "Failed to create hospital" }, { status: 400 });
   }
 }
