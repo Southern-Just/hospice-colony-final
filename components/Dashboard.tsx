@@ -23,6 +23,11 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [slide, setSlide] = useState(0);
 
+  const [displayTotalBeds, setDisplayTotalBeds] = useState(0);
+  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(0);
+  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(0);
+  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(0);
+
   const beforeAfterImages = [
     {
       before: '',
@@ -92,37 +97,28 @@ export function Dashboard() {
   const occupiedBeds = hospitals.reduce((sum, h) => sum + (Number(h.occupiedBeds) || 0), 0);
   const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
-  if (initialLoading) {
-    return (
-      <main className="max-w-7xl mx-auto px-6 py-12 flex items-center justify-center min-h-96">
-        <div className="text-center">
-          <Loader className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-          <p className="mt-4 text-gray-600">Loading hospital data...</p>
-        </div>
-      </main>
-    );
-  }
+  // Animate numbers after initial load
+  useEffect(() => {
+    if (!initialLoading && hospitals.length) {
+      const duration = 800; // animation duration in ms
+      const frames = 30;
+      let step = 0;
 
-  if (error && hospitals.length === 0) {
-    return (
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-red-800 mb-2">Failed to load data</h3>
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={() => fetchDashboardData()}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </main>
-    );
-  }
+      const animate = () => {
+        step++;
+        setDisplayTotalBeds(Math.round((step / frames) * totalBeds));
+        setDisplayAvailableBeds(Math.round((step / frames) * availableBeds));
+        setDisplayOccupiedBeds(Math.round((step / frames) * occupiedBeds));
+        setDisplayTotalHospitals(Math.round((step / frames) * totalHospitals));
+        if (step < frames) requestAnimationFrame(animate);
+      };
+
+      animate();
+    }
+  }, [initialLoading, hospitals, totalBeds, availableBeds, occupiedBeds, totalHospitals]);
 
   return (
-    <main className="max-w-7xl mx-auto px-6 py-12 flex gap-10">
+    <main className="max-w-7xl mx-auto px-6 py-12 flex gap-10 relative">
       <style>{`
         .shimmer { position: relative; overflow: hidden; background: #f3f4f6; border-radius: 0.5rem; }
         .shimmer::after { content: ""; position: absolute; top: 0; left: -150%; width: 150%; height: 100%;
@@ -132,6 +128,13 @@ export function Dashboard() {
         .fade-in { animation: fadeIn 300ms ease both; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
+
+      {/* Loader overlay */}
+      {initialLoading && (
+        <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+          <Loader className="h-10 w-10 animate-spin text-blue-600" />
+        </div>
+      )}
 
       <section className="flex-1 space-y-12">
 
@@ -143,25 +146,27 @@ export function Dashboard() {
           </p>
         </section>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Stats */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           <div className="rounded-2xl bg-blue-900 text-white p-8 text-center shadow-lg fade-in">
-            <div className="text-3xl font-bold">{totalBeds.toLocaleString()}</div>
+            <div className="text-3xl font-bold">{displayTotalBeds.toLocaleString()}</div>
             <p className="text-sm opacity-80 mt-2">Total Beds</p>
           </div>
           <div className="rounded-2xl bg-green-700 text-white p-8 text-center shadow-lg fade-in">
-            <div className="text-3xl font-bold">{availableBeds.toLocaleString()}</div>
+            <div className="text-3xl font-bold">{displayAvailableBeds.toLocaleString()}</div>
             <p className="text-sm opacity-80 mt-2">Available Beds</p>
           </div>
           <div className="rounded-2xl bg-red-700 text-white p-8 text-center shadow-lg fade-in">
-            <div className="text-3xl font-bold">{occupiedBeds.toLocaleString()}</div>
+            <div className="text-3xl font-bold">{displayOccupiedBeds.toLocaleString()}</div>
             <p className="text-sm opacity-80 mt-2">{occupancyRate}% Occupied</p>
           </div>
           <div className="rounded-2xl bg-gray-800 text-white p-8 text-center shadow-lg fade-in">
-            <div className="text-3xl font-bold">{totalHospitals}</div>
+            <div className="text-3xl font-bold">{displayTotalHospitals}</div>
             <p className="text-sm opacity-80 mt-2">Partner Facilities</p>
           </div>
         </section>
 
+        {/* Optimization results carousel */}
         <section className="bg-white rounded-2xl shadow p-6">
           <h3 className="text-xl font-semibold mb-4">Optimization Results</h3>
           <div className="relative h-64 bg-gray-100 rounded-lg overflow-hidden">
@@ -195,6 +200,7 @@ export function Dashboard() {
         </section>
       </section>
 
+      {/* Sidebar */}
       <aside className="hidden lg:block w-80">
         <div className="sticky top-8 space-y-4">
           <div className="flex items-center justify-between">
