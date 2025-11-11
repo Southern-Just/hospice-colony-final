@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/contexts/AuthContext";
 import { SettingsModal } from "@/components/SettingsModal";
+import { useRouter } from "next/navigation";
 
 const useCountUp = (endValue: number, duration = 1000) => {
   const [count, setCount] = useState(0);
@@ -58,7 +59,9 @@ const mockStats = {
 };
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [stats, setStats] = useState({
     totalBeds: 0,
@@ -70,8 +73,16 @@ export default function HomePage() {
   const [selectedHospital, setSelectedHospital] = useState<any>(null);
   const [showSettings, setShowSettings] = useState(false);
 
-
+  // Redirect if not logged in
   useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/sign-in");
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  // Load mock stats
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
     const timer = setTimeout(() => {
       setStats({
         totalBeds: mockStats.totalBeds,
@@ -83,12 +94,22 @@ export default function HomePage() {
       if (!selectedHospital) setSelectedHospital(mockStats.hospitals[0]);
     }, 300);
     return () => clearTimeout(timer);
-  }, [selectedHospital]);
+  }, [selectedHospital, isAuthenticated, isLoading]);
 
   const animatedTotalBeds = useCountUp(stats.totalBeds, 1200);
   const animatedAvailableBeds = useCountUp(stats.availableBeds, 1200);
   const animatedOccupiedBeds = useCountUp(stats.occupiedBeds, 1200);
   const animatedPartneredHospitals = useCountUp(stats.partneredHospitals, 1200);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen text-gray-500">
+        Loading user session...
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) return null;
 
   return (
     <div className="min-h-screen">
@@ -96,7 +117,10 @@ export default function HomePage() {
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 cursor-pointer" onClick={()=>window.location.href = "/"}>
+              <div
+                className="flex items-center space-x-2 cursor-pointer"
+                onClick={() => (window.location.href = "/")}
+              >
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                   <HospitalIcon className="w-5 h-5 text-primary-foreground" />
                 </div>
@@ -109,9 +133,9 @@ export default function HomePage() {
                 <Badge variant="secondary" className="hidden lg:flex">
                   Welcome, {user.firstName}
                 </Badge>
-
               )}
             </div>
+
             <div className="flex items-center space-x-3">
               <Button variant="outline" size="sm">
                 <BellIcon className="w-4 h-4 mr-1" />
@@ -122,7 +146,8 @@ export default function HomePage() {
                 <SettingsIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Settings</span>
               </Button>
-             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+              {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
             </div>
           </div>
         </div>
@@ -130,11 +155,17 @@ export default function HomePage() {
 
       <main className="container mx-auto px-6 py-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className=" w-[60%] bg-green-500 inline-flex mx-auto">
+          <TabsList className="w-[60%] bg-green-500 inline-flex mx-auto">
             <TabsTrigger value="dashboard">/</TabsTrigger>
-            <TabsTrigger value="partners"><HospitalIcon className="w-4 h-4" /> Partners</TabsTrigger>
-            <TabsTrigger value="beds"><BedIcon className="w-4 h-4" /> Bed Layout</TabsTrigger>
-            <TabsTrigger value="analytics"><BarChart3Icon className="w-4 h-4" /> Analytics</TabsTrigger>
+            <TabsTrigger value="partners">
+              <HospitalIcon className="w-4 h-4" /> Partners
+            </TabsTrigger>
+            <TabsTrigger value="beds">
+              <BedIcon className="w-4 h-4" /> Bed Layout
+            </TabsTrigger>
+            <TabsTrigger value="analytics">
+              <BarChart3Icon className="w-4 h-4" /> Analytics
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -160,10 +191,14 @@ export default function HomePage() {
                 <Select
                   value={selectedHospital?.id?.toString() || ""}
                   onValueChange={(value) =>
-                    setSelectedHospital(hospitals.find((h) => h.id.toString() === value) || null)
+                    setSelectedHospital(
+                      hospitals.find((h) => h.id.toString() === value) || null
+                    )
                   }
                 >
-                  <SelectTrigger><SelectValue placeholder="Select a hospital" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a hospital" />
+                  </SelectTrigger>
                   <SelectContent>
                     {hospitals.map((hospital) => (
                       <SelectItem key={hospital.id} value={hospital.id.toString()}>
