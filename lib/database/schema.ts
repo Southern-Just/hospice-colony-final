@@ -1,5 +1,13 @@
 import {
-  pgTable, text, timestamp, integer, uuid, varchar, boolean, jsonb, real, numeric, unique
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+  boolean,
+  jsonb,
+  numeric,
+  unique,
 } from "drizzle-orm/pg-core";
 
 /* ---------------- USERS ---------------- */
@@ -11,6 +19,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name", { length: 100 }).notNull(),
   role: varchar("role", { length: 50 }).notNull().default("staff"),
   hospitalId: uuid("hospital_id").references(() => hospitals.id, { onDelete: "set null" }),
+  wardId: uuid("ward_id").references(() => wards.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -41,6 +50,7 @@ export const hospitals = pgTable("hospitals", {
   status: varchar("status", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: varchar("created_by", { length: 255 }),
 });
 
 /* ---------------- WARDS ---------------- */
@@ -61,7 +71,6 @@ export const beds = pgTable("beds", {
   bedNumber: varchar("bed_number", { length: 50 }).notNull(),
   priority: varchar("priority", { length: 50 }).notNull(),
   position: jsonb("position").notNull(),
-  pheromoneLevel: real("pheromone_level").notNull().default(1.0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, t => ({
@@ -79,7 +88,7 @@ export const admissionRequests = pgTable("admission_requests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-/* ---------------- BED ALLOCATION (ACO OUTPUT) ---------------- */
+/* ---------------- BED ALLOCATIONS (ACO OUTPUT) ---------------- */
 export const bedAllocations = pgTable("bed_allocations", {
   id: uuid("id").defaultRandom().primaryKey(),
   requestId: uuid("request_id").notNull().references(() => admissionRequests.id, { onDelete: "cascade" }),
@@ -88,27 +97,7 @@ export const bedAllocations = pgTable("bed_allocations", {
   allocatedAt: timestamp("allocated_at").defaultNow().notNull(),
 });
 
-/* ---------------- PHEROMONES ---------------- */
-export const pheromones = pgTable("pheromones", {
-  hospitalId: uuid("hospital_id").notNull().references(() => hospitals.id, { onDelete: 'cascade' }),
-  fromBedId: uuid("from_bed_id").notNull().references(() => beds.id, { onDelete: 'cascade' }),
-  toBedId: uuid("to_bed_id").notNull().references(() => beds.id, { onDelete: 'cascade' }),
-  value: real("value").notNull().default(1.0),
-  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
-}, table => ({
-  pk: unique().on(table.fromBedId, table.toBedId)
-}));
-
-/* ---------------- PHEROMONE HISTORY ---------------- */
-export const pheromoneUpdates = pgTable("pheromone_updates", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  bedId: uuid("bed_id").notNull().references(() => beds.id, { onDelete: "cascade" }),
-  newLevel: real("new_level").notNull(),
-  reason: varchar("reason", { length: 255 }),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-/* ---------------- ALLOCATION LOG ---------------- */
+/* ---------------- ALLOCATION LOGS ---------------- */
 export const allocationLogs = pgTable("allocation_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   requestId: uuid("request_id").references(() => admissionRequests.id),

@@ -15,6 +15,34 @@
       "when": 1762761753122,
       "tag": "0001_dusty_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762844781782,
+      "tag": "0002_cultured_luminals",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762848971779,
+      "tag": "0003_hesitant_virginia_dare",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762860449529,
+      "tag": "0004_chunky_quentin_quire",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1762860684097,
+      "tag": "0005_colossal_timeslip",
+      "breakpoints": true
     }
   ]
 }

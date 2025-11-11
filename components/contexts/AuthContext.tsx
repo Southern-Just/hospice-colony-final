@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { User } from '@/lib/database/schema';
 import { toast } from 'sonner';
+import type { User } from '@/types';
+import { useRouter } from 'next/navigation';
 
 interface ExtendedUser extends Partial<User> {
   hospitalId?: string | null;
@@ -22,9 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
 
@@ -33,10 +32,11 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const router = useRouter();
   const [user, setUser] = useState<ExtendedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchOrCreateHospital = async (hospitalId: string | null, hospitalName?: string | null): Promise<{ id: string; name: string } | null> => {
+  const fetchOrCreateHospital = async (hospitalId: string | null, hospitalName?: string | null) => {
     try {
       if (!hospitalId && hospitalName) {
         const createRes = await fetch('/api/hospitals', {
@@ -62,12 +62,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const refreshUser = async (userId: string) => {
     try {
-      const userRes = await fetch(`/api/users/${userId}`);
-      if (!userRes.ok) {
-        toast.error("Failed to refresh user data.");
+      const res = await fetch(`/api/users/${userId}`);
+      if (!res.ok) {
+        toast.error('Failed to refresh user data.');
         return;
       }
-      const { user: refreshedUser } = await userRes.json();
+      const { user: refreshedUser } = await res.json();
       let hospitalId = refreshedUser.hospitalId;
       let hospitalName = refreshedUser.hospitalName;
       const hospitalData = await fetchOrCreateHospital(hospitalId, hospitalName);
@@ -77,11 +77,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       const userToStore = { ...refreshedUser, hospitalName, hospitalId: hospitalId || null };
       if (typeof window !== 'undefined') {
-        localStorage.setItem('userData', JSON.stringify(refreshedUser));
+        localStorage.setItem('userData', JSON.stringify(userToStore));
       }
       setUser(userToStore);
     } catch {
-      toast.error("Error refreshing profile data.");
+      toast.error('Error refreshing profile data.');
     }
   };
 
@@ -131,7 +131,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const userToStore = { ...returnedUser, hospitalName, hospitalId: hospitalId || null };
       if (typeof window !== 'undefined') {
         localStorage.setItem('authToken', token);
-        localStorage.setItem('userData', JSON.stringify(returnedUser));
+        localStorage.setItem('userData', JSON.stringify(userToStore));
       }
       setUser(userToStore);
       return true;
@@ -146,10 +146,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
       if (token) {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
       }
     } finally {
       if (typeof window !== 'undefined') {
@@ -157,6 +154,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.removeItem('userData');
       }
       setUser(null);
+      router.push('/sign-in'); // redirect to sign-in
     }
   };
 
