@@ -1,19 +1,31 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import { Loader, RefreshCw } from 'lucide-react';
 import { Hospital, Ward } from '@/types';
 
-export function Dashboard() {
+interface DashboardProps {
+  totalBeds: number;
+  availableBeds: number;
+  occupiedBeds: number;
+  partneredHospitals: number;
+}
+
+export function Dashboard({
+  totalBeds,
+  availableBeds,
+  occupiedBeds,
+  partneredHospitals,
+}: DashboardProps) {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [sidebarLoading, setSidebarLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [displayTotalBeds, setDisplayTotalBeds] = useState(0);
-  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(0);
-  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(0);
-  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(0);
-
+  const [displayTotalBeds, setDisplayTotalBeds] = useState(totalBeds);
+  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(availableBeds);
+  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(occupiedBeds);
+  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(partneredHospitals);
 
   const normalizeHospital = (h: any) => {
     const totalBeds = Number(h.totalBeds ?? 0);
@@ -23,8 +35,11 @@ export function Dashboard() {
     let specialties: string[] = [];
     if (Array.isArray(h.specialties)) specialties = h.specialties;
     else if (typeof h.specialties === 'string') {
-      try { specialties = JSON.parse(h.specialties); }
-      catch { specialties = [h.specialties]; }
+      try {
+        specialties = JSON.parse(h.specialties);
+      } catch {
+        specialties = [h.specialties];
+      }
     } else if (h.specialties) specialties = [String(h.specialties)];
 
     const wards: Ward[] = Array.isArray(h.wards)
@@ -58,14 +73,16 @@ export function Dashboard() {
     }
   };
 
-  useEffect(() => { fetchDashboardData(); }, []);
-
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
   const totalHospitals = hospitals.length;
-  const totalBeds = hospitals.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
-  const availableBeds = hospitals.reduce((sum, h) => sum + (h.availableBeds || 0), 0);
-  const occupiedBeds = hospitals.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
-  const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
+  const computedTotalBeds = hospitals.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
+  const computedAvailableBeds = hospitals.reduce((sum, h) => sum + (h.availableBeds || 0), 0);
+  const computedOccupiedBeds = hospitals.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
+  const occupancyRate =
+    computedTotalBeds > 0 ? Math.round((computedOccupiedBeds / computedTotalBeds) * 100) : 0;
 
   useEffect(() => {
     if (!initialLoading && hospitals.length) {
@@ -73,15 +90,15 @@ export function Dashboard() {
       let step = 0;
       const animate = () => {
         step++;
-        setDisplayTotalBeds(Math.round((step / frames) * totalBeds));
-        setDisplayAvailableBeds(Math.round((step / frames) * availableBeds));
-        setDisplayOccupiedBeds(Math.round((step / frames) * occupiedBeds));
+        setDisplayTotalBeds(Math.round((step / frames) * computedTotalBeds));
+        setDisplayAvailableBeds(Math.round((step / frames) * computedAvailableBeds));
+        setDisplayOccupiedBeds(Math.round((step / frames) * computedOccupiedBeds));
         setDisplayTotalHospitals(Math.round((step / frames) * totalHospitals));
         if (step < frames) requestAnimationFrame(animate);
       };
       animate();
     }
-  }, [initialLoading, hospitals, totalBeds, availableBeds, occupiedBeds, totalHospitals]);
+  }, [initialLoading, hospitals, computedTotalBeds, computedAvailableBeds, computedOccupiedBeds, totalHospitals]);
 
   const userHospital = hospitals[0] ?? { wards: [] };
 
@@ -104,23 +121,17 @@ export function Dashboard() {
       )}
 
       <section className="flex-1 space-y-12">
-        {/* Hero Section */}
         <section className="relative h-50 rounded-2xl shadow overflow-hidden">
-          <div
-            className="absolute inset-0 flex transition-transform duration-500 ease-in-out"
-          >
+          <div className="absolute inset-0 flex transition-transform duration-500 ease-in-out">
             <div className="w-full flex-shrink-0 flex flex-col items-center justify-center p-8 text-center bg-hospice bg-cover bg-center">
               <h2 className="text-3xl font-semibold text-gray-900 mb-4">Why Hospice::Colony?</h2>
               <p className="text-gray-700 leading-relaxed max-w-xl">
                 Hospital bed shortages lead to critical delays. Hospice::Colony enables coordinated bed sharing across hospitals.
               </p>
             </div>
-
           </div>
-
         </section>
 
-        {/* Stats */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           <div className="rounded-2xl bg-blue-900 text-white p-8 text-center shadow-lg fade-in">
             <div className="text-3xl font-bold">{displayTotalBeds}</div>
@@ -140,11 +151,13 @@ export function Dashboard() {
           </div>
         </section>
 
-        {/* Wards Section */}
         <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {userHospital.wards?.length ? (
-            userHospital.wards.map(w => (
-              <div key={w.id} className="bg-white rounded-lg p-4 shadow border border-gray-200 text-center hover:shadow-md transition-all">
+            userHospital.wards.map((w) => (
+              <div
+                key={w.id}
+                className="bg-white rounded-lg p-4 shadow border border-gray-200 text-center hover:shadow-md transition-all"
+              >
                 <div className="font-semibold text-gray-800">{w.name}</div>
                 <div className="mt-2 text-xl font-bold">{w.totalBeds} Beds</div>
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -160,7 +173,6 @@ export function Dashboard() {
         </section>
       </section>
 
-      {/* Sidebar */}
       <aside className="hidden lg:block w-80">
         <div className="sticky top-8 space-y-4">
           <div className="flex items-center justify-between">
@@ -180,7 +192,7 @@ export function Dashboard() {
                 <div className="h-24 shimmer" />
               </>
             ) : (
-              hospitals.map(h => {
+              hospitals.map((h) => {
                 const free = h.availableBeds || 0;
                 const total = h.totalBeds || 0;
                 const rate = total > 0 ? Math.round(((total - free) / total) * 100) : 0;
