@@ -117,7 +117,7 @@ export default function HomePage() {
                 <BellIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Alerts</span>
               </Button>
-
+n
               <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
                 <SettingsIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Settings</span>
