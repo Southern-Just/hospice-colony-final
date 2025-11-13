@@ -1,0 +1,1 @@
+ALTER TABLE "hospitals" ADD COLUMN "created_by" varchar(255);

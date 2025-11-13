@@ -1,68 +1,53 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '@/lib/db'; // your Drizzle ORM instance
-import { hospitals, users } from '@/lib/schema'; // your tables
-import { getServerSession } from 'next-auth'; // or Clerk auth if using Clerk
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/database/db";
+import { users, hospitals } from "@/lib/database/schema";
+import { eq } from "drizzle-orm";
+import jwt from "jsonwebtoken";
 
-type SessionResponse = {
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    role: string;
-    hospitalId: string;
-  } | null;
-  hospital?: any; // optional full hospital data
-};
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse<SessionResponse>) {
+export async function GET(req: NextRequest) {
   try {
-    // Get logged-in user from your auth system
-    const session = await getServerSession(req, res); // adjust if using Clerk
-    if (!session?.user?.id) {
-      return res.status(200).json({ user: null });
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Missing or invalid token" }, { status: 401 });
     }
 
-    // Fetch user from DB to get role and hospitalId
-    const user = await db.query.users.findFirst({
-      where: (u) => u.id.equals(session.user.id),
-    });
+    const token = authHeader.split(" ")[1];
+    const secret = process.env.JWT_SECRET || "change_this_in_prod";
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch {
+      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
+    }
+
+    const userId = decoded?.userId;
+    if (!userId) {
+      return NextResponse.json({ error: "Invalid token payload" }, { status: 400 });
+    }
+
+    const [user] = await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        role: users.role,
+        hospitalId: users.hospitalId,
+        hospitalName: hospitals.name,
+      })
+      .from(users)
+      .leftJoin(hospitals, eq(users.hospitalId, hospitals.id))
+      .where(eq(users.id, userId))
+      .limit(1);
 
     if (!user) {
-      return res.status(200).json({ user: null });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const userData = {
-      id: user.id,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      email: user.email,
-      role: user.role,
-      hospitalId: user.hospital_id,
-    };
-
-    // Optionally fetch full hospital info for the user
-    let hospitalData = undefined;
-    if (user.hospital_id) {
-      const hospital = await db.query.hospitals.findFirst({
-        where: (h) => h.id.equals(user.hospital_id),
-      });
-
-      if (hospital) {
-        hospitalData = {
-          ...hospital,
-          wards: hospital.wards || [],
-          specialties: hospital.specialties || [],
-        };
-      }
-    }
-
-    return res.status(200).json({
-      user: userData,
-      hospital: hospitalData,
-    });
-  } catch (err) {
-    console.error('Session fetch error:', err);
-    return res.status(500).json({ user: null });
+    return NextResponse.json({ user });
+  } catch (error) {
+    console.error("SESSION ERROR:", error);
+    return NextResponse.json({ error: "Failed to verify session" }, { status: 500 });
   }
 }

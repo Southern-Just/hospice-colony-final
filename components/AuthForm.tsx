@@ -22,8 +22,8 @@ interface AuthFormData {
   role?: string;
 }
 
-export default function AuthForm() {
-  const [mode, setMode] = useState<Mode>('sign-in');
+export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sign-up" }) {
+  const [mode, setMode] = useState<"sign-in" | "sign-up">(type);
   const [formData, setFormData] = useState<AuthFormData>({
     email: '',
     password: '',

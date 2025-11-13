@@ -2,104 +2,87 @@
 
 import { useState, useEffect } from 'react';
 import { Loader, RefreshCw } from 'lucide-react';
+import { Hospital, Ward } from '@/types';
 
-type Bed = {
-  id: number;
-  hospitalId: number;
-  wardId: number | null;
-  status: string;
-  bedNumber: string;
-  priority: string;
-};
-
-type Ward = {
-  id: number;
-  name: string;
+interface DashboardProps {
   totalBeds: number;
   availableBeds: number;
-  maintenanceBeds: number;
-};
+  occupiedBeds: number;
+  partneredHospitals: number;
+}
 
-type Hospital = {
-  id: number;
-  name: string;
-  totalBeds: number;
-  availableBeds: number;
-  occupiedBeds?: number;
-  maintenanceBeds?: number;
-  specialties?: string[] | any;
-  status?: string;
-  phone?: string;
-  beds: Bed[];
-  wards?: Ward[];
-};
-
-export function Dashboard() {
+export function Dashboard({
+  totalBeds,
+  availableBeds,
+  occupiedBeds,
+  partneredHospitals,
+}: DashboardProps) {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [sidebarLoading, setSidebarLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [slide, setSlide] = useState(0);
 
-  const [displayTotalBeds, setDisplayTotalBeds] = useState(0);
-  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(0);
-  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(0);
-  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(0);
-
-  // Old optimization carousel data
-  const beforeAfterImages = [
-    { before: '', after: '', title: 'Emergency Ward Optimization', description: 'Reduced wait times by 45% through coordinated bed allocation' },
-    { before: '', after: '', title: 'ICU Resource Sharing', description: 'Improved critical care access across partner hospitals' }
-  ];
+  const [displayTotalBeds, setDisplayTotalBeds] = useState(totalBeds);
+  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(availableBeds);
+  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(occupiedBeds);
+  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(partneredHospitals);
 
   const normalizeHospital = (h: any) => {
     const totalBeds = Number(h.totalBeds ?? 0);
     const availableBeds = Number(h.availableBeds ?? 0);
     const occupiedBeds = totalBeds - availableBeds;
+
     let specialties: string[] = [];
     if (Array.isArray(h.specialties)) specialties = h.specialties;
     else if (typeof h.specialties === 'string') {
-      try { specialties = JSON.parse(h.specialties); }
-      catch { specialties = [h.specialties]; }
+      try {
+        specialties = JSON.parse(h.specialties);
+      } catch {
+        specialties = [h.specialties];
+      }
     } else if (h.specialties) specialties = [String(h.specialties)];
 
-    // Add mock wards for demo
-    const wards: Ward[] = h.wards ?? [
-      { id: 1, name: 'ICU', totalBeds: 10, availableBeds: 4, maintenanceBeds: 1 },
-      { id: 2, name: 'General', totalBeds: 20, availableBeds: 5, maintenanceBeds: 2 },
-      { id: 3, name: 'Maternity', totalBeds: 15, availableBeds: 3, maintenanceBeds: 1 },
-    ];
+    const wards: Ward[] = Array.isArray(h.wards)
+      ? h.wards.map((w: any) => ({
+          ...w,
+          totalBeds: Number(w.totalBeds ?? 0),
+          availableBeds: Number(w.availableBeds ?? 0),
+          maintenanceBeds: Number(w.maintenanceBeds ?? 0),
+        }))
+      : [];
 
-    return { ...h, beds: h.beds ?? [], totalBeds, availableBeds, occupiedBeds, specialties, wards };
+    return { ...h, totalBeds, availableBeds, occupiedBeds, specialties, wards };
   };
 
   const fetchDashboardData = async (opts?: { refresh?: boolean }) => {
     try {
       if (opts?.refresh) setSidebarLoading(true);
-      else { setInitialLoading(true); setError(null); }
+      else {
+        setInitialLoading(true);
+        setError(null);
+      }
       const res = await fetch('/api/hospitals');
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
       const json = await res.json();
       setHospitals((json.hospitals ?? []).map(normalizeHospital));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error');
+      setError(err instanceof Error ? err.message : 'Error loading data');
     } finally {
       if (opts?.refresh) setSidebarLoading(false);
       else setInitialLoading(false);
     }
   };
 
-  useEffect(() => { fetchDashboardData(); }, []);
   useEffect(() => {
-    const interval = setInterval(() => setSlide(s => (s + 1) % 2), 5000); // Only two slides: Why Hospice & Optimization
-    return () => clearInterval(interval);
+    fetchDashboardData();
   }, []);
 
   const totalHospitals = hospitals.length;
-  const totalBeds = hospitals.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
-  const availableBeds = hospitals.reduce((sum, h) => sum + (h.availableBeds || 0), 0);
-  const occupiedBeds = hospitals.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
-  const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
+  const computedTotalBeds = hospitals.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
+  const computedAvailableBeds = hospitals.reduce((sum, h) => sum + (h.availableBeds || 0), 0);
+  const computedOccupiedBeds = hospitals.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
+  const occupancyRate =
+    computedTotalBeds > 0 ? Math.round((computedOccupiedBeds / computedTotalBeds) * 100) : 0;
 
   useEffect(() => {
     if (!initialLoading && hospitals.length) {
@@ -107,17 +90,16 @@ export function Dashboard() {
       let step = 0;
       const animate = () => {
         step++;
-        setDisplayTotalBeds(Math.round((step / frames) * totalBeds));
-        setDisplayAvailableBeds(Math.round((step / frames) * availableBeds));
-        setDisplayOccupiedBeds(Math.round((step / frames) * occupiedBeds));
+        setDisplayTotalBeds(Math.round((step / frames) * computedTotalBeds));
+        setDisplayAvailableBeds(Math.round((step / frames) * computedAvailableBeds));
+        setDisplayOccupiedBeds(Math.round((step / frames) * computedOccupiedBeds));
         setDisplayTotalHospitals(Math.round((step / frames) * totalHospitals));
         if (step < frames) requestAnimationFrame(animate);
       };
       animate();
     }
-  }, [initialLoading, hospitals, totalBeds, availableBeds, occupiedBeds, totalHospitals]);
+  }, [initialLoading, hospitals, computedTotalBeds, computedAvailableBeds, computedOccupiedBeds, totalHospitals]);
 
-  // Pick the first hospital as "logged in user's hospital" mock
   const userHospital = hospitals[0] ?? { wards: [] };
 
   return (
@@ -139,51 +121,17 @@ export function Dashboard() {
       )}
 
       <section className="flex-1 space-y-12">
-        <section className="relative h-44 rounded-2xl shadow overflow-hidden">
-          <div className="absolute inset-0 flex transition-transform duration-500 ease-in-out"
-              style={{ transform: `translateX(-${slide * 100}%)` }}>
-
-            {/* Slide 1: Why Hospice */}
+        <section className="relative h-50 rounded-2xl shadow overflow-hidden">
+          <div className="absolute inset-0 flex transition-transform duration-500 ease-in-out">
             <div className="w-full flex-shrink-0 flex flex-col items-center justify-center p-8 text-center bg-hospice bg-cover bg-center">
               <h2 className="text-3xl font-semibold text-gray-900 mb-4">Why Hospice::Colony?</h2>
               <p className="text-gray-700 leading-relaxed max-w-xl">
                 Hospital bed shortages lead to critical delays. Hospice::Colony enables coordinated bed sharing across hospitals.
               </p>
             </div>
-
-            <div className="w-full flex-shrink-0 bg-hospice bg-cover bg-center">
-              <div className="relative h-full rounded-lg overflow-hidden">
-                <div className="absolute inset-0 flex transition-transform duration-500 ease-in-out">
-                  {beforeAfterImages.map((image, index) => (
-                    <div key={index} className="w-full flex-shrink-0 flex">
-                      <div className="flex-1">
-                        <div className="h-32 bg-total-beds rounded mb-1 flex items-center justify-center" />
-                        <h4 className="font-semibold">{image.title}</h4>
-                        <p className="text-sm text-gray-600">{image.description}</p>
-                      </div>
-                      <div className="flex-1">
-                        <div className="h-32 bg-occupied-beds rounded mb-1 flex items-center justify-center" />
-                        <h4 className="font-semibold">Optimized Layout</h4>
-                        <p className="text-sm text-gray-600">Improved efficiency and patient flow</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-            {[0, 1].map(i => (
-              <button key={i} onClick={() => setSlide(i)}
-                      className={`w-3 h-3 rounded-full ${slide === i ? 'bg-blue-600' : 'bg-gray-300'}`} />
-            ))}
           </div>
         </section>
 
-
-        {/* Stats */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           <div className="rounded-2xl bg-blue-900 text-white p-8 text-center shadow-lg fade-in">
             <div className="text-3xl font-bold">{displayTotalBeds}</div>
@@ -203,23 +151,28 @@ export function Dashboard() {
           </div>
         </section>
 
-        {/* Wards container */}
         <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {userHospital.wards?.map(w => (
-            <div key={w.id} className="bg-white rounded-lg p-4 shadow border border-gray-200 text-center">
-              <div className="font-semibold text-gray-800">{w.name}</div>
-              <div className="mt-2 text-xl font-bold">{w.totalBeds} Beds</div>
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>{w.availableBeds} Avail</span>
-                <span>{w.maintenanceBeds} Maint</span>
-                <span>{w.totalBeds} Total</span>
+          {userHospital.wards?.length ? (
+            userHospital.wards.map((w) => (
+              <div
+                key={w.id}
+                className="bg-white rounded-lg p-4 shadow border border-gray-200 text-center hover:shadow-md transition-all"
+              >
+                <div className="font-semibold text-gray-800">{w.name}</div>
+                <div className="mt-2 text-xl font-bold">{w.totalBeds} Beds</div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>{w.availableBeds} Avail</span>
+                  <span>{w.maintenanceBeds} Maint</span>
+                  <span>{w.totalBeds} Total</span>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-center text-gray-400 italic col-span-full">No wards data available</p>
+          )}
         </section>
       </section>
 
-      {/* Sidebar */}
       <aside className="hidden lg:block w-80">
         <div className="sticky top-8 space-y-4">
           <div className="flex items-center justify-between">
@@ -228,7 +181,7 @@ export function Dashboard() {
               onClick={() => fetchDashboardData({ refresh: true })}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${sidebarLoading ? 'animate-spin text-blue-500' : ''}`} />
             </button>
           </div>
           <div className="space-y-3">
@@ -239,11 +192,12 @@ export function Dashboard() {
                 <div className="h-24 shimmer" />
               </>
             ) : (
-              hospitals.map(h => {
+              hospitals.map((h) => {
                 const free = h.availableBeds || 0;
                 const total = h.totalBeds || 0;
                 const rate = total > 0 ? Math.round(((total - free) / total) * 100) : 0;
                 const specialties = Array.isArray(h.specialties) ? h.specialties : [];
+
                 return (
                   <div key={h.id} className="bg-white rounded-lg p-4 shadow border border-gray-200 fade-in">
                     <div className="flex justify-between items-start mb-2">
@@ -252,26 +206,30 @@ export function Dashboard() {
                         {h.status || 'active'}
                       </span>
                     </div>
+
                     <div className="h-2 bg-gray-200 rounded mt-2">
                       <div
                         className={`h-full rounded transition-all duration-300 ${
-                          rate > 80 ? 'bg-red-500' :
-                          rate > 60 ? 'bg-yellow-500' :
-                          'bg-green-500'
+                          rate > 80 ? 'bg-red-500' : rate > 60 ? 'bg-yellow-500' : 'bg-green-500'
                         }`}
                         style={{ width: `${rate}%` }}
                       />
                     </div>
+
                     <div className="flex justify-between text-xs text-gray-600 mt-2">
                       <span>{free} available</span>
                       <span>{rate}% occupied</span>
                     </div>
+
                     {specialties.length > 0 && (
-                      <div className="mt-2">
-                        <span className="text-xs text-gray-500">
-                          Specialties: {specialties.slice(0, 2).join(', ')}
-                          {specialties.length > 2 && '...'}
-                        </span>
+                      <div className="mt-3 flex justify-center gap-1 flex-wrap">
+                        {specialties.slice(0, 5).map((s, idx) => (
+                          <div
+                            key={idx}
+                            className="w-3 h-3 rounded-full bg-blue-500 opacity-80 hover:opacity-100"
+                            title={s}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>

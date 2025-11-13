@@ -1,57 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/database/db";
-import { hospitals, beds } from "@/lib/database/schema";
-import { sql } from "drizzle-orm";
+import { hospitals, wards, beds } from "@/lib/database/schema";
 
 export async function GET() {
   try {
-    const hospitalList = await db.select().from(hospitals).where(sql`${hospitals.status} = 'active'`);
-    const bedStats = await db
-      .select({
-        hospitalId: beds.hospitalId,
-        totalBeds: sql<number>`COUNT(*)`,
-        availableBeds: sql<number>`SUM(CASE WHEN ${beds.status} = 'available' THEN 1 ELSE 0 END)`,
-        occupiedBeds: sql<number>`SUM(CASE WHEN ${beds.status} = 'occupied' THEN 1 ELSE 0 END)`,
-        maintenanceBeds: sql<number>`SUM(CASE WHEN ${beds.status} = 'maintenance' THEN 1 ELSE 0 END)`
-      })
-      .from(beds)
-      .groupBy(beds.hospitalId);
-    const bedLists = await db.select().from(beds);
-    const result = hospitalList.map(h => {
-      const stats = bedStats.find(b => b.hospitalId === h.id);
-      const hospitalBeds = bedLists.filter(b => b.hospitalId === h.id);
-      return {
-        ...h,
-        totalBeds: stats?.totalBeds ?? 0,
-        availableBeds: stats?.availableBeds ?? 0,
-        occupiedBeds: stats?.occupiedBeds ?? 0,
-        maintenanceBeds: stats?.maintenanceBeds ?? 0,
-        beds: hospitalBeds
-      };
+    const allHospitals = await db.select().from(hospitals);
+    const allWards = await db.select().from(wards);
+    const allBeds = await db.select().from(beds);
+
+    const result = allHospitals.map(h => {
+      const hospitalWards = allWards.filter(w => w.hospitalId === h.id);
+      const hospitalBeds = allBeds.filter(b => b.hospitalId === h.id);
+      const totalBeds = hospitalBeds.length;
+      const availableBeds = hospitalBeds.filter(b => b.status === "available").length;
+      const occupiedBeds = hospitalBeds.filter(b => b.status === "occupied").length;
+      const maintenanceBeds = hospitalBeds.filter(b => b.status === "maintenance").length;
+      const specialties = [...new Set(hospitalWards.map(w => w.specialty).filter(Boolean))];
+      return { ...h, wards: hospitalWards, totalBeds, availableBeds, occupiedBeds, maintenanceBeds, specialties };
     });
+
     return NextResponse.json({ hospitals: result });
-  } catch {
-    return NextResponse.json({ error: "Server Error" }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to fetch hospitals" }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const data = await request.json();
+    const data = await req.json();
     const inserted = await db.insert(hospitals).values({
       name: data.name,
       location: data.location,
+      specialties: data.specialties ?? [],
       phone: data.phone,
       city: data.city,
       state: data.state,
-      address: data.address,
       email: data.email,
+      notes: data.notes,
+      address: data.address,
       website: data.website,
-      specialties: data.specialties ?? [],
-      status: "active",
+      status: data.status ?? "active",
+      createdBy: data.createdBy ?? null,
     }).returning();
-    return NextResponse.json(inserted[0]);
-  } catch {
+    return NextResponse.json({ hospital: inserted[0] });
+  } catch (err) {
     return NextResponse.json({ error: "Failed to create hospital" }, { status: 400 });
   }
 }

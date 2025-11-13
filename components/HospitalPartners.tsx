@@ -7,36 +7,7 @@ import { Button } from './ui/button';
 import { HospitalIcon, MapPinIcon, PhoneIcon } from 'lucide-react';
 import { HospitalModal } from './HospitalModal';
 import { useAuth } from '@/components/contexts/AuthContext';
-
-type Ward = {
-  id: string;
-  name: string;
-  totalBeds: number;
-  availableBeds: number;
-  occupiedBeds: number;
-  maintenanceBeds?: number;
-  notes?: string;
-};
-
-type Hospital = {
-  id: string;
-  name: string;
-  location?: string;
-  phone?: string;
-  status?: string;
-  specialties?: string[];
-  totalBeds: number;
-  availableBeds: number;
-  occupiedBeds: number;
-  maintenanceBeds?: number;
-  wards?: Ward[];
-  email?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  website?: string;
-  notes?: string;
-};
+import { Hospital } from '@/types';
 
 export function HospitalPartners() {
   const { user } = useAuth();
@@ -56,7 +27,7 @@ export function HospitalPartners() {
       const res = await fetch('/api/hospitals');
       if (!res.ok) throw new Error(`Failed to fetch hospitals: ${res.status}`);
       const data = await res.json();
-      const hospitalsData = (data.hospitals ?? []).map(h => ({
+      const hospitalsData = (data.hospitals ?? []).map((h: any) => ({
         ...h,
         totalBeds: h.totalBeds ?? h.total_beds ?? 0,
         availableBeds: h.availableBeds ?? h.available_beds ?? 0,
@@ -81,8 +52,9 @@ export function HospitalPartners() {
   };
 
   useEffect(() => {
+    if (!user) return;
     fetchHospitals();
-  }, []);
+  }, [user?.hospitalId]);
 
   if (loading)
     return (
@@ -140,7 +112,7 @@ export function HospitalPartners() {
                     </div>
                   </div>
                   <Badge
-                    variant={hospital.status === 'Active' ? 'default' : 'secondary'}
+                    variant={hospital.status === 'active' ? 'default' : 'secondary'}
                     className={`px-2 py-1 text-xs ${
                       hospital.status === 'Active'
                         ? 'bg-green-500 hover:bg-green-600'
