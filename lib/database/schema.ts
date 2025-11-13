@@ -1,13 +1,4 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  varchar,
-  boolean,
-  jsonb,
-  numeric,
-  unique,
+import {  pgTable,  text,  timestamp,  uuid,  varchar,  boolean,  jsonb,  numeric,  unique,
 } from "drizzle-orm/pg-core";
 
 /* ---------------- USERS ---------------- */

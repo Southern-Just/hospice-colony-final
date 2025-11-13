@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { pheromones } from "./schema";
+import { pheromones } from "./lib/database/schema";
 import { eq } from "drizzle-orm";
 
 export async function loadPheromones(): Promise<Map<string, number>> {
@@ -39,5 +39,6 @@ export async function evaporatePheromones(rate: number) {
       .set({ value: newValue })
       .where(eq(pheromones.fromBedId, row.fromBedId))
       .where(eq(pheromones.toBedId, row.toBedId));
+      // ...enhance({ timeout: 10, retry: 3 }) // this is set to bring more reliability
   }
 }
