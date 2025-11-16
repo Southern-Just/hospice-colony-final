@@ -136,14 +136,14 @@ export function SettingsModal({ onClose }: Props) {
       <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 relative overflow-y-auto max-h-[90vh]">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors"
+          className="absolute top-4 right-4 p-2 rounded-full text-gray-600 bg-red-100 hover:text-red-600 transition-colors"
           aria-label="Close"
         >
           <CloseIcon className="h-6 w-6" />
         </button>
 
         <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">
-          {displayName}'s Profile
+          {displayName}&apos;s Profile
         </h2>
 
         {loading ? (
@@ -199,7 +199,7 @@ export function SettingsModal({ onClose }: Props) {
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t mt-6">
-              <Button variant="destructive" onClick={logout}>
+              <Button className='bg-red-300 text-white' onClick={logout}>
                 Logout
               </Button>
               <div className="flex space-x-2">

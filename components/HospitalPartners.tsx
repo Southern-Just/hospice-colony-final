@@ -1,13 +1,70 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { HospitalIcon, MapPinIcon, PhoneIcon } from 'lucide-react';
-import { HospitalModal } from './HospitalModal';
-import { useAuth } from '@/components/contexts/AuthContext';
-import { Hospital } from '@/types';
+import { useState, useEffect } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { HospitalIcon, MapPinIcon, PhoneIcon } from "lucide-react";
+import { HospitalModal } from "./HospitalModal";
+import { useAuth } from "@/components/contexts/AuthContext";
+import { Hospital } from "@/types";
+
+function ShimmerCard() {
+  return (
+    <Card className="shadow-lg rounded-2xl p-6 animate-pulse">
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-200 rounded-lg h-10 w-10" />
+            <div>
+              <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
+              <div className="h-3 w-20 bg-gray-200 rounded" />
+            </div>
+          </div>
+          <div className="h-5 w-16 bg-gray-200 rounded" />
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4 mt-4">
+        <div className="grid grid-cols-4 gap-4 text-center">
+          <div className="space-y-2">
+            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
+            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
+            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
+            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
+            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
+          </div>
+        </div>
+
+        <div>
+          <div className="h-3 w-20 bg-gray-200 rounded mb-2" />
+          <div className="flex flex-wrap gap-2">
+            <div className="h-6 w-16 bg-gray-200 rounded-full" />
+            <div className="h-6 w-12 bg-gray-200 rounded-full" />
+            <div className="h-6 w-20 bg-gray-200 rounded-full" />
+          </div>
+        </div>
+      </CardContent>
+
+      <footer className="flex justify-between items-center mt-4 border-t pt-3">
+        <div className="h-3 w-28 bg-gray-200 rounded" />
+        <div className="flex gap-2">
+          <div className="h-7 w-16 bg-gray-300 rounded-full" />
+          <div className="h-7 w-16 bg-gray-300 rounded-full" />
+        </div>
+      </footer>
+    </Card>
+  );
+}
 
 export function HospitalPartners() {
   const { user } = useAuth();
@@ -17,14 +74,14 @@ export function HospitalPartners() {
   const [error, setError] = useState<string | null>(null);
   const [modalHospital, setModalHospital] = useState<Hospital | null>(null);
 
-  const userHospitalId = user?.hospitalId ?? '';
-  const userRole = user?.role ?? '';
+  const userHospitalId = user?.hospitalId ?? "";
+  const userRole = user?.role ?? "";
 
   const fetchHospitals = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/hospitals');
+      const res = await fetch("/api/hospitals");
       if (!res.ok) throw new Error(`Failed to fetch hospitals: ${res.status}`);
       const data = await res.json();
       const hospitalsData = (data.hospitals ?? []).map((h: any) => ({
@@ -34,20 +91,18 @@ export function HospitalPartners() {
         occupiedBeds: h.occupiedBeds ?? h.occupied_beds ?? 0,
         maintenanceBeds: h.maintenanceBeds ?? h.maintenance_beds ?? 0,
         specialties: h.specialties ?? [],
-        wards: h.wards ?? [],
+        wards: h.wards ?? []
       }));
       setHospitals(hospitalsData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error fetching hospitals');
+    } catch (err: any) {
+      setError(err.message || "Error fetching hospitals");
     } finally {
       setLoading(false);
     }
   };
 
   const handleUpdateHospital = (updatedData: Partial<Hospital>) => {
-    setHospitals(prev =>
-      prev.map(h => (h.id === updatedData.id ? { ...h, ...updatedData } : h))
-    );
+    setHospitals(prev => prev.map(h => (h.id === updatedData.id ? { ...h, ...updatedData } : h)));
     setModalHospital(null);
   };
 
@@ -58,16 +113,30 @@ export function HospitalPartners() {
 
   if (loading)
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">Loading hospitals...</p>
+      <main className="min-h-screen bg-gray-50 p-6 space-y-8">
+        <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
+            <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
+          </div>
+          <Button className="bg-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 rounded-lg px-4 py-2">
+            Hospice::Colony Algo. Aided Transfers
+          </Button>
+        </header>
+
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <ShimmerCard key={i} />
+          ))}
+        </section>
       </main>
     );
 
   if (error)
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-red-600">{error}</p>
-        <Button onClick={fetchHospitals}>Retry</Button>
+        <Button onClick={fetchHospitals} className="rounded-full bg-background shadow shadow-green-600 text-xl text-green-600 hover:bg-background hover:shadow-gray-400 hover:text-green-500 ">Perhaps Refresh! </Button>
+        <p className="text-[9px] text-red-500">{error}</p>
       </main>
     );
 
@@ -78,7 +147,7 @@ export function HospitalPartners() {
           <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
           <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
         </div>
-        <Button className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700 rounded-lg px-4 py-2">
+        <Button className="bg-blue-200 text-blue-600 cursor-pointer hover:bg-blue-200 rounded-lg px-4 py-2 hover:text-blue-400">
           Hospice::Colony Algo. Aided Transfers
         </Button>
       </header>
@@ -86,8 +155,7 @@ export function HospitalPartners() {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {hospitals.map(hospital => {
           const availableBedsCount = hospital.availableBeds;
-          const occupiedBeds =
-            hospital.totalBeds - availableBedsCount - (hospital.maintenanceBeds ?? 0);
+          const occupiedBeds = hospital.totalBeds - availableBedsCount - (hospital.maintenanceBeds ?? 0);
 
           return (
             <Card key={hospital.id} className="shadow-lg rounded-2xl p-6 flex flex-col justify-between">
@@ -112,11 +180,11 @@ export function HospitalPartners() {
                     </div>
                   </div>
                   <Badge
-                    variant={hospital.status === 'active' ? 'default' : 'secondary'}
+                    variant={hospital.status === "active" ? "default" : "secondary"}
                     className={`px-2 py-1 text-xs ${
-                      hospital.status === 'Active'
-                        ? 'bg-green-500 hover:bg-green-600'
-                        : 'bg-gray-400 hover:bg-gray-500 text-white'
+                      hospital.status === "Active"
+                        ? "bg-green-500 hover:bg-green-600"
+                        : "bg-gray-400 hover:bg-gray-500 text-white"
                     }`}
                   >
                     {hospital.status}
@@ -140,32 +208,26 @@ export function HospitalPartners() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Maintenance</p>
-                    <p className="text-lg font-semibold text-yellow-600">
-                      {hospital.maintenanceBeds ?? 0}
-                    </p>
+                    <p className="text-lg font-semibold text-yellow-600">{hospital.maintenanceBeds ?? 0}</p>
                   </div>
                 </div>
 
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Specialties</p>
                   <div className="flex flex-wrap gap-2">
-                    {Array.from(new Set(['General', ...(hospital.specialties ?? [])])).map(
-                      specialty => (
-                        <button
-                          key={`${hospital.id}-${specialty}`}
-                          className={`px-2 py-1 rounded-full text-xs transition-colors ${
-                            selectedWard[hospital.id] === specialty
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
-                          onClick={() =>
-                            setSelectedWard(prev => ({ ...prev, [hospital.id]: specialty }))
-                          }
-                        >
-                          {specialty.replace(/_/g, ' ')}
-                        </button>
-                      )
-                    )}
+                    {Array.from(new Set(["General", ...(hospital.specialties ?? [])])).map(specialty => (
+                      <button
+                        key={`${hospital.id}-${specialty}`}
+                        className={`px-2 py-1 rounded-full text-xs transition-colors ${
+                          selectedWard[hospital.id] === specialty
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        }`}
+                        onClick={() => setSelectedWard(prev => ({ ...prev, [hospital.id]: specialty }))}
+                      >
+                        {specialty.replace(/_/g, " ")}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </CardContent>

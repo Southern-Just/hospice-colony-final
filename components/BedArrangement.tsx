@@ -6,6 +6,7 @@ import { Button } from "./ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { RefreshCwIcon, ZapIcon, FilterIcon, EditIcon } from "lucide-react"
 import { toast } from "sonner"
+import { useAuth } from "@/components/contexts/AuthContext"
 
 type BedStatus = "available" | "occupied" | "maintenance" | "reserved"
 type PositionObj = { x: number; y: number }
@@ -13,10 +14,11 @@ type UIBed = { id: string; bedNumber: string; ward: string; status: BedStatus; p
 type ApiBed = { id: string; hospitalId: string; wardId: string | null; bedNumber: string; status: string; priority: string; position: PositionObj | null }
 type Hospital = { id: string; name: string; location: string; totalBeds: number; availableBeds: number; specialties: string[]; status: string; phone: string }
 type Ward = { id: string; name: string }
-type UserContext = { id: string; hospitalId: string; role: "admin" | "staff" | "viewer" }
 
 const GRID_COLS = 8
 const GRID_ROWS = 8
+const CELL_W = 64
+const CELL_H = 64
 const GRID_SIZE = GRID_COLS * GRID_ROWS
 const DOOR_ROW = GRID_ROWS - 1
 const DOOR_RANGE_START = DOOR_ROW * GRID_COLS
@@ -28,68 +30,62 @@ const getBedColor = (status: BedStatus) =>
   "bg-blue-500"
 
 export default function BedArrangement() {
+  const { user } = useAuth()
+  const userHospitalId = user?.hospitalId ?? ""
+  const userRole = user?.role ?? ""
+
   const [hospitals, setHospitals] = useState<Hospital[]>([])
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>("")
   const [beds, setBeds] = useState<UIBed[]>([])
   const bedsRef = useRef<UIBed[]>([])
   useEffect(() => { bedsRef.current = beds }, [beds])
+
+  const [oldBeds, setOldBeds] = useState<UIBed[]>([])
   const [selectedWard, setSelectedWard] = useState<string>("all")
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false)
   const pheromones = useRef<number[]>(Array(GRID_SIZE).fill(1))
   const alpha = 1
   const beta = 2
   const evaporation = 0.85
+
   const [isEditing, setIsEditing] = useState<boolean>(false)
   const [bedsInEdit, setBedsInEdit] = useState<UIBed[]>([])
   const [bedStatusPrompt, setBedStatusPrompt] = useState<{ position: number, id: string } | null>(null)
   const [wardsMap, setWardsMap] = useState<Record<string, string>>({})
-  const [user, setUser] = useState<UserContext | null>(null)
 
   useEffect(() => {
+    if (!user) return
     async function fetchInitial() {
       try {
         const hres = await fetch('/api/hospitals')
-        const hjson = await hres.json()
-        const hospitalsData: Hospital[] = Array.isArray(hjson) ? hjson : hjson.hospitals ?? []
-        setHospitals(hospitalsData)
-        if (hospitalsData.length) setSelectedHospitalId(hospitalsData[0].id)
-        const ures = await fetch('/api/users')
-        const ujson = await ures.json()
-        const maybeUsers = ujson.users ?? ujson
-        const userData: UserContext | null = Array.isArray(maybeUsers) ? maybeUsers[0] ?? null : maybeUsers ?? null
-        setUser(userData)
+        const { hospitals: hList = [] } = await hres.json()
+        setHospitals(hList)
+        if (hList.length) setSelectedHospitalId(userHospitalId || hList[0].id)
       } catch {
-        toast.error("Failed to load hospitals or user")
+        toast.error("Failed to load hospitals")
       }
     }
     fetchInitial()
-  }, [])
+  }, [user])
 
   useEffect(() => {
     if (!selectedHospitalId) return
     async function fetchBedsAndWards() {
       try {
         const bres = await fetch(`/api/hospitals/${selectedHospitalId}/beds`)
-        const bjson = await bres.json()
-        const apiBeds: ApiBed[] = bjson.beds ?? []
+        const { beds: apiBeds = [] } = await bres.json()
         const mapped: UIBed[] = apiBeds.map(b => {
           const pos = b.position ?? { x: 0, y: 0 }
-          const index = typeof pos === "object" && pos !== null ? (pos.y * GRID_COLS + pos.x) : -1
-          return { id: b.id, bedNumber: b.bedNumber, ward: b.wardId ?? (b.bedNumber || "ward"), status: (b.status as BedStatus) ?? "available", positionIndex: index >= 0 ? Math.max(0, Math.min(GRID_SIZE - 1, index)) : -1, priority: b.priority ?? "normal", hospitalId: b.hospitalId }
+          const index = pos.y * GRID_COLS + pos.x
+          return { id: b.id, bedNumber: b.bedNumber, ward: b.wardId ?? "ward", status: (b.status as BedStatus) ?? "available", positionIndex: Math.max(0, Math.min(GRID_SIZE - 1, index)), priority: b.priority ?? "normal", hospitalId: b.hospitalId }
         })
         setBeds(mapped)
-        try {
-          const wres = await fetch(`/api/hospitals/${selectedHospitalId}/wards`)
-          const wjson = await wres.json()
-          const apiWards: Ward[] = wjson.wards ?? []
-          const map: Record<string, string> = {}
-          for (const w of apiWards) map[w.id] = w.name
-          const replaced = mapped.map(m => ({ ...m, ward: m.ward && map[m.ward] ? map[m.ward] : m.ward }))
-          setBeds(replaced)
-          setWardsMap(map)
-        } catch {
-          setWardsMap({})
-        }
+        const wres = await fetch(`/api/hospitals/${selectedHospitalId}/wards`)
+        const { wards: apiWards = [] } = await wres.json()
+        const map: Record<string, string> = {}
+        for (const w of apiWards) map[w.id] = w.name
+        setWardsMap(map)
+        setBeds(mapped.map(b => ({ ...b, ward: map[b.ward] ?? b.ward })))
       } catch {
         toast.error("Failed to load beds")
       }
@@ -153,6 +149,7 @@ export default function BedArrangement() {
   }
 
   const optimizeArrangement = useCallback(() => {
+    setOldBeds(bedsRef.current.map(b => ({ ...b })))
     setIsOptimizing(true)
     pheromones.current = pheromones.current.map(p => Math.max(p * evaporation, 0.01))
     const targetBeds = bedsRef.current.map(b => ({ ...b }))
@@ -168,26 +165,20 @@ export default function BedArrangement() {
       const newStatus = Math.random() < 0.5 ? "occupied" : "available"
       return { ...tb, positionIndex: move.to, status: newStatus }
     })
-    setBeds(newBeds)
     setTimeout(() => {
-      setIsOptimizing(false)
+      setBeds(newBeds)
+      setTimeout(() => {
+        setIsOptimizing(false)
+        setOldBeds([])
+      }, 900)
     }, 300)
     toast.success("Best allocation simulated")
   }, [])
 
   const enterEditMode = () => {
-    if (!user) {
-      toast.error("User not loaded")
-      return
-    }
-    if (user.role !== "admin") {
-      toast.error("Permission Denied")
-      return
-    }
-    if (user.hospitalId !== selectedHospitalId) {
-      toast.error("Hospital Affiliation Required")
-      return
-    }
+    if (!user) { toast.error("User not loaded"); return }
+    if (userRole !== "admin") { toast.error("Permission Denied"); return }
+    if (userHospitalId !== selectedHospitalId) { toast.error("Hospital Affiliation Required"); return }
     const bedsForHospital = beds.filter(b => b.hospitalId === selectedHospitalId)
     setBedsInEdit(bedsForHospital.map(b => ({ ...b, positionIndex: b.positionIndex ?? -1 })))
     setSelectedWard("all")
@@ -205,10 +196,7 @@ export default function BedArrangement() {
 
   const handleGridClick = (position: number) => {
     if (!isEditing) return
-    if (position >= DOOR_RANGE_START && position < DOOR_RANGE_START + GRID_COLS) {
-      toast.warning("Invalid Position")
-      return
-    }
+    if (position >= DOOR_RANGE_START && position < DOOR_RANGE_START + GRID_COLS) { toast.warning("Invalid Position"); return }
     const existingBed = bedsInEdit.find(b => b.positionIndex === position)
     if (existingBed) {
       setBedsInEdit(prev => prev.map(b => b.id === existingBed.id ? { ...b, positionIndex: -1 } : b))
@@ -216,11 +204,8 @@ export default function BedArrangement() {
       toast.info(`Bed ${existingBed.bedNumber} removed from position ${position}`)
     } else {
       const unplacedBed = bedsInEdit.find(b => b.positionIndex === -1)
-      if (unplacedBed) {
-        setBedStatusPrompt({ position, id: unplacedBed.id })
-      } else {
-        toast.warning("All Beds Placed")
-      }
+      if (unplacedBed) setBedStatusPrompt({ position, id: unplacedBed.id })
+      else toast.warning("All Beds Placed")
     }
   }
 
@@ -250,12 +235,17 @@ export default function BedArrangement() {
   const getCellCoordinates = (pos: number) => {
     const col = pos % GRID_COLS
     const row = Math.floor(pos / GRID_COLS)
-    return { left: col * 64, top: row * 64 }
+    return { left: col * CELL_W, top: row * CELL_H }
   }
 
   return (
     <div className="space-y-6 relative">
       <style>{`
+        .curve-path { stroke: rgba(0,0,0,.9); fill: none; stroke-linecap: round; stroke-linejoin: round; animation: curvePulse 1.6s ease-in-out infinite; }
+        .curve-dot { fill: #111; opacity: .95; }
+        @keyframes curvePulse { 0% { stroke-width: 1; stroke-opacity: .15 } 50% { stroke-width: 3; stroke-opacity: .9 } 100% { stroke-width: 1; stroke-opacity: .15 } }
+        @keyframes moveAlong { 0% { offset-distance: 0% } 100% { offset-distance: 100% } }
+        .moving-dot { offset-path: path(''); animation: moveAlong 1s linear forwards; }
         .edit-cell { cursor: pointer; transition: background-color 0.1s; }
         .edit-cell:hover { background-color: #e0f2f1; }
       `}</style>
@@ -353,16 +343,32 @@ export default function BedArrangement() {
           <Card>
             <CardHeader><CardTitle>{isEditing ? `Edit Layout for ${hospitals.find(h => h.id === selectedHospitalId)?.name}` : "Ward Grid"}</CardTitle></CardHeader>
             <CardContent>
-              <div className="relative">
-                {bedStatusPrompt && (
-                  <div className="absolute z-20 p-2 bg-white border border-blue-500 rounded shadow-lg transform translate-x-[-50%] translate-y-[-100%] max-w-48" style={getCellCoordinates(bedStatusPrompt.position)}>
-                    <p className="text-xs font-semibold mb-1">Set Bed Status:</p>
-                    <div className="flex gap-1">
-                      {["available", "occupied", "maintenance", "reserved"].map(status => (
-                        <Button key={status} variant="outline" size="sm" className={`h-6 text-[10px] px-1 ${getBedColor(status as BedStatus).replace("-500", "-300")}`} onClick={() => handleStatusSelection(bedStatusPrompt.position, bedStatusPrompt.id, status as BedStatus)}>{status.charAt(0).toUpperCase()}</Button>
-                      ))}
-                    </div>
-                  </div>
+              <div className="relative w-full h-full">
+                {isOptimizing && oldBeds.length > 0 && (
+                  <svg className="absolute inset-0 z-20 pointer-events-none" width="100%" height={GRID_ROWS * CELL_H}>
+                    {visibleBeds.map(b => {
+                      const old = oldBeds.find(o => o.id === b.id)
+                      if (!old || old.positionIndex === b.positionIndex) return null
+                      const p1 = getCellCoordinates(old.positionIndex)
+                      const p2 = getCellCoordinates(b.positionIndex)
+                      const c1x = p1.left + CELL_W * 0.5
+                      const c1y = p1.top + CELL_H * 0.5 - 40
+                      const c2x = p2.left + CELL_W * 0.5
+                      const c2y = p2.top + CELL_H * 0.5 - 40
+                      const d = `M ${p1.left + CELL_W * 0.5} ${p1.top + CELL_H * 0.5} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.left + CELL_W * 0.5} ${p2.top + CELL_H * 0.5}`
+                      const pathId = `path-${b.id}`
+                      return (
+                        <g key={b.id}>
+                          <path id={pathId} d={d} className="curve-path" />
+                          <circle className="curve-dot">
+                            <animateMotion dur="1s" repeatCount="1" fill="freeze">
+                              <mpath href={`#${pathId}`} />
+                            </animateMotion>
+                          </circle>
+                        </g>
+                      )
+                    })}
+                  </svg>
                 )}
 
                 <div className={`grid grid-cols-8 gap-4 p-4 ${isEditing ? 'border-4 border-dashed border-teal-300' : ''}`}>

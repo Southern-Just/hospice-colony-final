@@ -91,7 +91,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
   };
 
   return (
-    <div className="min-h-screen bg-partner-hospitals flex items-center justify-center p-4">
+    <div className="min-h-screen bg-hospice flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-3">
           <div className="flex justify-center">
@@ -108,7 +108,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
           </Badge>
         </div>
 
-        <Card className="w-full bg-partner-hospitals shadow-lg">
+        <Card className="w-full bg-background1 shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className='flex items-center justify-center gap-2 text-xl font-bold'>
               <p>Powered &rarr;</p>
@@ -137,7 +137,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
                           value={formData.firstName}
                           onChange={handleChange}
                           required
-                          className="pl-10"
+                          className="pl-10 bg-background"
                           disabled={isLoading}
                         />
                       </div>
@@ -154,7 +154,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
                           value={formData.lastName}
                           onChange={handleChange}
                           required
-                          className="pl-10"
+                          className="pl-10 bg-background"
                           disabled={isLoading}
                         />
                       </div>
@@ -174,7 +174,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
                           value={formData.facility}
                           onChange={handleChange}
                           required
-                          className="pl-10"
+                          className="pl-10 bg-background"
                           disabled={isLoading}
                         />
                       </div>
@@ -187,7 +187,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
                         value={formData.role}
                         onChange={handleChange}
                         required
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded-md border border-input bg-background px-5 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         disabled={isLoading}
                       >
                         <option value="">Select role</option>
@@ -212,7 +212,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="pl-10"
+                    className="pl-10 bg-background"
                     disabled={isLoading}
                   />
                 </div>
@@ -230,7 +230,7 @@ export default function AuthForm({ type = "sign-in" }: { type?: "sign-in" | "sig
                     value={formData.password}
                     onChange={handleChange}
                     required
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-10  bg-background"
                     disabled={isLoading}
                   />
                   <Button

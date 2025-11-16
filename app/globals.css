@@ -5,6 +5,7 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-background1: var(--background1);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -46,6 +47,7 @@
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 89.876);
+  --background1:oklch(85.819% 0.00283 285.83);
   --foreground: oklch(0.129 0.042 264.695);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
@@ -79,7 +81,7 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
+  --background: oklch(70.576% 0.00008 271.152);
   --foreground: oklch(0.984 0.003 247.858);
   --card: oklch(0.208 0.042 265.755);
   --card-foreground: oklch(0.984 0.003 247.858);
@@ -129,6 +131,9 @@
 .scrollbar-hide {
   -ms-overflow-style: none; /* IE & Edge */
   scrollbar-width: none; /* Firefox */
+}
+Button{
+  cursor: pointer;
 }
 
 

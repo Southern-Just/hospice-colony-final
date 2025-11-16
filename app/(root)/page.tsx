@@ -7,6 +7,7 @@ import {
   BarChart3Icon,
   SettingsIcon,
   BellIcon,
+  Loader,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -103,8 +104,10 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen text-gray-500">
-        Loading user session...
+      <div className="flex flex-col-reverse gap-6 items-center justify-center h-screen text-gray-500">
+        Session Loading...
+        <Loader className="h-14 w-14 animate-spin text-blue-200" />
+
       </div>
     );
   }
@@ -113,7 +116,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b bg-card hospice-bg">
+      <header className="border-b bg-card">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -137,12 +140,11 @@ export default function HomePage() {
             </div>
 
             <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm"  className="cursor-pointer">
                 <BellIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Alerts</span>
               </Button>
-n
-              <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
+              <Button variant="outline" size="sm" onClick={() => setShowSettings(true)} className="cursor-pointer">
                 <SettingsIcon className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Settings</span>
               </Button>
