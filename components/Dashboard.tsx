@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader, RefreshCw } from 'lucide-react';
-import { Hospital, Ward } from '@/types';
+import { Hospital, Ward, Bed } from '@/types';
 
 interface DashboardProps {
   totalBeds: number;
@@ -28,30 +28,44 @@ export function Dashboard({
   const [displayTotalHospitals, setDisplayTotalHospitals] = useState(partneredHospitals);
 
   const normalizeHospital = (h: any) => {
-    const totalBeds = Number(h.totalBeds ?? 0);
-    const availableBeds = Number(h.availableBeds ?? 0);
-    const occupiedBeds = totalBeds - availableBeds;
+    const rawSpecs =
+      Array.isArray(h.specialties)
+        ? h.specialties
+        : typeof h.specialties === "string"
+            ? (() => { try { return JSON.parse(h.specialties) } catch { return [h.specialties] } })()
+            : h.specialties
+                ? [String(h.specialties)]
+                : [];
 
-    let specialties: string[] = [];
-    if (Array.isArray(h.specialties)) specialties = h.specialties;
-    else if (typeof h.specialties === 'string') {
-      try {
-        specialties = JSON.parse(h.specialties);
-      } catch {
-        specialties = [h.specialties];
+    const specialties = Array.from(new Set(["General", ...rawSpecs]));
+
+    const beds: Bed[] = Array.isArray(h.beds) ? h.beds : [];
+
+    const wardMap: Record<string, Ward> = {};
+
+    beds.forEach(b => {
+      if (!wardMap[b.wardId]) {
+        wardMap[b.wardId] = {
+          id: b.wardId,
+          name: h.wards?.find((w: any) => w.id === b.wardId)?.name || "Ward",
+          totalBeds: 0,
+          availableBeds: 0,
+          maintenanceBeds: 0,
+        };
       }
-    } else if (h.specialties) specialties = [String(h.specialties)];
+      const w = wardMap[b.wardId];
+      w.totalBeds += 1;
+      if (b.status === "available") w.availableBeds += 1;
+      if (b.status === "maintenance") w.maintenanceBeds += 1;
+    });
 
-    const wards: Ward[] = Array.isArray(h.wards)
-      ? h.wards.map((w: any) => ({
-          ...w,
-          totalBeds: Number(w.totalBeds ?? 0),
-          availableBeds: Number(w.availableBeds ?? 0),
-          maintenanceBeds: Number(w.maintenanceBeds ?? 0),
-        }))
-      : [];
+    const wards = Object.values(wardMap);
 
-    return { ...h, totalBeds, availableBeds, occupiedBeds, specialties, wards };
+    const totalBeds = beds.length;
+    const availableBeds = beds.filter(b => b.status === "available").length;
+    const occupiedBeds = beds.filter(b => b.status === "occupied").length;
+
+    return { ...h, beds, wards, totalBeds, availableBeds, occupiedBeds, specialties };
   };
 
   const fetchDashboardData = async (opts?: { refresh?: boolean }) => {
@@ -61,10 +75,30 @@ export function Dashboard({
         setInitialLoading(true);
         setError(null);
       }
+
       const res = await fetch('/api/hospitals');
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
       const json = await res.json();
-      setHospitals((json.hospitals ?? []).map(normalizeHospital));
+
+      const hospitalsData = await Promise.all(
+        (json.hospitals ?? []).map(async (h: any) => {
+          const [bedsRes, wardsRes] = await Promise.all([
+            fetch(`/api/hospitals/${h.id}/beds`),
+            fetch(`/api/hospitals/${h.id}/wards`),
+          ]);
+
+          const bedsJson = bedsRes.ok ? await bedsRes.json() : { beds: [] };
+          const wardsJson = wardsRes.ok ? await wardsRes.json() : { wards: [] };
+
+          return normalizeHospital({
+            ...h,
+            beds: bedsJson.beds || [],
+            wards: wardsJson.wards || [],
+          });
+        })
+      );
+
+      setHospitals(hospitalsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error loading data');
     } finally {

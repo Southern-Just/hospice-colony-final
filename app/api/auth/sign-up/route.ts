@@ -1,98 +1,86 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/database/db";
-import { users, hospitals } from "@/lib/database/schema";
-import { eq } from "drizzle-orm";
+import { users, hospitals, sessions } from "@/lib/database/schema";
+import { eq, ilike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { cookies } from "next/headers";
 
-/**
- * POST /api/auth/signup
- * Creates a new user and auto-creates a hospital if it doesn't exist.
- */
 export async function POST(req: Request) {
   try {
-    const { email, password, firstName, lastName, facility, role } = await req.json();
+    const { email, password, firstName, lastName, facility, facilityId, role } = await req.json();
 
-    // 1️⃣ Basic validation
-    if (!email || !password || !firstName || !lastName || !facility) {
+    if (!email || !password || !firstName || !lastName) {
       return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
     }
 
-    // 2️⃣ Prevent duplicate users
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.email, email),
-    });
+    const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
+    if (existing) return NextResponse.json({ message: "User already exists" }, { status: 400 });
 
-    if (existingUser) {
-      return NextResponse.json({ message: "User already exists" }, { status: 400 });
+    let hospitalId = facilityId ?? null;
+
+    if (hospitalId) {
+      const adminExists = await db.query.users.findFirst({
+        where: (users, { eq }) => eq(users.hospitalId, hospitalId) && eq(users.role, "admin"),
+      });
+
+      if (role?.toLowerCase() === "admin" && adminExists) {
+        return NextResponse.json({ message: "This facility already has an admin." }, { status: 400 });
+      }
+    } else if (facility) {
+      const exists = await db.query.hospitals.findFirst({
+        where: ilike(hospitals.name, facility),
+      });
+
+      if (exists) {
+        hospitalId = exists.id;
+      } else {
+        const [newHospital] = await db
+          .insert(hospitals)
+          .values({
+            name: facility,
+            status: "active",
+            createdBy: null,
+          })
+          .returning();
+        hospitalId = newHospital.id;
+      }
     }
 
-    // 3️⃣ Check for existing hospital (case-insensitive match)
-    const existingHospital = await db.query.hospitals.findFirst({
-      where: eq(hospitals.name, facility),
-    });
+    const hashed = await bcrypt.hash(password, 10);
 
-    let hospitalId: string;
-
-    if (!existingHospital) {
-      // 4️⃣ Create a new hospital (minimal info for now)
-      const [newHospital] = await db
-        .insert(hospitals)
-        .values({
-          name: facility,
-          status: "Active",
-          createdBy: "", // temporarily empty, we’ll update after user creation
-        })
-        .returning();
-
-      hospitalId = newHospital.id;
-    } else {
-      hospitalId = existingHospital.id;
-    }
-
-    // 5️⃣ Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 6️⃣ Create user record
     const [newUser] = await db
       .insert(users)
       .values({
         email,
-        password: hashedPassword,
+        password: hashed,
         firstName,
         lastName,
-        role: role?.toLowerCase() ?? "staff",
+        role: (role || "staff").toLowerCase(),
         hospitalId,
       })
       .returning();
 
-    // 7️⃣ Update hospital.createdBy only if it’s empty or null
-    if (!existingHospital?.createdBy) {
-      await db
-        .update(hospitals)
-        .set({ createdBy: newUser.id })
-        .where(eq(hospitals.id, hospitalId));
-    }
+    const token = crypto.randomBytes(48).toString("hex");
 
-    // 8️⃣ Respond cleanly (omit password)
-    return NextResponse.json(
-      {
-        message: "Account created successfully",
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          role: newUser.role,
-          hospitalId,
-        },
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("SIGN-UP ERROR:", error);
-    return NextResponse.json(
-      { message: "Internal Server Error" },
-      { status: 500 }
-    );
+    await db.insert(sessions).values({
+      userId: newUser.id,
+      token,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+    });
+
+    const cookieStore = await cookies();
+    cookieStore.set("session_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return NextResponse.json({ user: newUser }, { status: 201 });
+  } catch (err) {
+    console.error("SIGN-UP ERROR:", err);
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

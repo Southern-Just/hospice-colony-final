@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/database/db";
-import { users, hospitals } from "@/lib/database/schema";
+import { users, hospitals, sessions } from "@/lib/database/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "change_this_in_prod";
+import crypto from "crypto";
+import { cookies } from "next/headers";
 
 export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
-
-    if (!email || !password) {
-      return NextResponse.json({ message: "Email and password required" }, { status: 400 });
-    }
+    if (!email || !password) return NextResponse.json({ message: "Email and password required" }, { status: 400 });
 
     const result = await db
       .select({
@@ -31,20 +27,30 @@ export async function POST(req: Request) {
       .where(eq(users.email, email))
       .limit(1);
 
-    if (!result.length) {
-      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
-    }
-
     const user = result[0];
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+
+    const token = crypto.randomBytes(48).toString("hex");
+
+    await db.insert(sessions).values({
+      userId: user.id,
+      token,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+    });
+
+    const cookieStore = await cookies();
+    cookieStore.set("session_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
 
     return NextResponse.json({
-      token,
       user: {
         id: user.id,
         email: user.email,
@@ -55,8 +61,8 @@ export async function POST(req: Request) {
         hospitalName: user.hospitalName ?? null,
       },
     });
-  } catch (error) {
-    console.error("SIGN-IN ERROR:", error);
+  } catch (err) {
+    console.error("SIGN-IN ERROR:", err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

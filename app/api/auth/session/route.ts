@@ -1,29 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/database/db";
-import { users, hospitals } from "@/lib/database/schema";
+import { users, hospitals, sessions } from "@/lib/database/schema";
 import { eq } from "drizzle-orm";
-import jwt from "jsonwebtoken";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Missing or invalid token" }, { status: 401 });
-    }
+    const cookieStore = await cookies();
+    const token = cookieStore.get("session_token")?.value;
 
-    const token = authHeader.split(" ")[1];
-    const secret = process.env.JWT_SECRET || "change_this_in_prod";
+    if (!token) return NextResponse.json({ user: null }, { status: 401 });
 
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, secret);
-    } catch {
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
-    }
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.token, token))
+      .limit(1);
 
-    const userId = decoded?.userId;
-    if (!userId) {
-      return NextResponse.json({ error: "Invalid token payload" }, { status: 400 });
+    if (!session || new Date(session.expiresAt) < new Date()) {
+      if (session) await db.delete(sessions).where(eq(sessions.token, token));
+      return NextResponse.json({ user: null }, { status: 401 });
     }
 
     const [user] = await db
@@ -38,16 +34,14 @@ export async function GET(req: NextRequest) {
       })
       .from(users)
       .leftJoin(hospitals, eq(users.hospitalId, hospitals.id))
-      .where(eq(users.id, userId))
+      .where(eq(users.id, session.userId))
       .limit(1);
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    if (!user) return NextResponse.json({ user: null }, { status: 401 });
 
     return NextResponse.json({ user });
-  } catch (error) {
-    console.error("SESSION ERROR:", error);
-    return NextResponse.json({ error: "Failed to verify session" }, { status: 500 });
+  } catch (err) {
+    console.error("SESSION ERROR:", err);
+    return NextResponse.json({ user: null }, { status: 500 });
   }
 }

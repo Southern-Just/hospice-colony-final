@@ -1,13 +1,14 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { HospitalIcon, MapPinIcon, PhoneIcon } from "lucide-react";
-import { HospitalModal } from "./HospitalModal";
-import { useAuth } from "@/components/contexts/AuthContext";
-import { Hospital } from "@/types";
+import { useState, useEffect } from "react"
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { HospitalIcon, MapPinIcon, PhoneIcon } from "lucide-react"
+import { HospitalModal } from "./HospitalModal"
+import { useAuth } from "@/components/contexts/AuthContext"
+import TransferModal from "@/components/TransferModal"
+import { Hospital, Ward, Bed } from "@/types"
 
 function ShimmerCard() {
   return (
@@ -63,53 +64,78 @@ function ShimmerCard() {
         </div>
       </footer>
     </Card>
-  );
+  )
 }
 
 export function HospitalPartners() {
-  const { user } = useAuth();
-  const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [selectedWard, setSelectedWard] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [modalHospital, setModalHospital] = useState<Hospital | null>(null);
+  const { user } = useAuth()
+  const [hospitals, setHospitals] = useState<Hospital[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [modalHospital, setModalHospital] = useState<Hospital | null>(null)
 
-  const userHospitalId = user?.hospitalId ?? "";
-  const userRole = user?.role ?? "";
+  const [selectedWard, setSelectedWard] = useState<Record<string, string>>({})
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferFromHospital, setTransferFromHospital] = useState<Hospital | null>(null)
+  const [transferFromWards, setTransferFromWards] = useState<string[]>([])
+
+  const userHospitalId = user?.hospitalId ?? ""
+  const userRole = user?.role ?? ""
 
   const fetchHospitals = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch("/api/hospitals");
-      if (!res.ok) throw new Error(`Failed to fetch hospitals: ${res.status}`);
-      const data = await res.json();
-      const hospitalsData = (data.hospitals ?? []).map((h: any) => ({
-        ...h,
-        totalBeds: h.totalBeds ?? h.total_beds ?? 0,
-        availableBeds: h.availableBeds ?? h.available_beds ?? 0,
-        occupiedBeds: h.occupiedBeds ?? h.occupied_beds ?? 0,
-        maintenanceBeds: h.maintenanceBeds ?? h.maintenance_beds ?? 0,
-        specialties: h.specialties ?? [],
-        wards: h.wards ?? []
-      }));
-      setHospitals(hospitalsData);
-    } catch (err: any) {
-      setError(err.message || "Error fetching hospitals");
-    } finally {
-      setLoading(false);
-    }
-  };
+      setLoading(true)
+      const res = await fetch("/api/hospitals", { cache: "no-store" })
+      if (!res.ok) throw new Error("Failed to fetch hospitals")
 
-  const handleUpdateHospital = (updatedData: Partial<Hospital>) => {
-    setHospitals(prev => prev.map(h => (h.id === updatedData.id ? { ...h, ...updatedData } : h)));
-    setModalHospital(null);
-  };
+      const { hospitals } = await res.json()
+
+      const enriched: Hospital[] = []
+
+      for (const h of hospitals) {
+        const wardsRes = await fetch(`/api/hospitals/${h.id}/wards`, { cache: "no-store" })
+        const bedsRes = await fetch(`/api/hospitals/${h.id}/beds`, { cache: "no-store" })
+
+        const wardData = await wardsRes.json()
+        const bedData = await bedsRes.json()
+
+        const wards: Ward[] = Array.isArray(wardData.wards) ? wardData.wards : []
+        const beds: Bed[] = Array.isArray(bedData.beds) ? bedData.beds : []
+
+        const total = beds.length
+        const available = beds.filter(b => b.status === "available").length
+        const occupied = beds.filter(b => b.status === "occupied").length
+        const maintenance = beds.filter(b => b.status === "maintenance").length
+
+        enriched.push({
+          ...h,
+          totalBeds: total,
+          availableBeds: available,
+          occupiedBeds: occupied,
+          maintenanceBeds: maintenance,
+          wards,
+          specialties: Array.from(new Set(["General", ...wards.map(w => w.name)]))
+
+        })
+      }
+
+      setHospitals(enriched)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateHospital = (updated: Hospital) => {
+    setHospitals(prev => prev.map(h => (h.id === updated.id ? updated : h)))
+    setModalHospital(null)
+  }
 
   useEffect(() => {
-    if (!user) return;
-    fetchHospitals();
-  }, [user?.hospitalId]);
+    if (!user) return
+    fetchHospitals()
+  }, [user?.hospitalId])
 
   if (loading)
     return (
@@ -119,7 +145,7 @@ export function HospitalPartners() {
             <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
             <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
           </div>
-          <Button className="bg-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 rounded-lg px-4 py-2">
+          <Button className="bg-blue-200 text-blue-600 cursor-pointer rounded-lg px-4 py-2">
             Hospice::Colony Algo. Aided Transfers
           </Button>
         </header>
@@ -130,15 +156,20 @@ export function HospitalPartners() {
           ))}
         </section>
       </main>
-    );
+    )
 
   if (error)
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <Button onClick={fetchHospitals} className="rounded-full bg-background shadow shadow-green-600 text-xl text-green-600 hover:bg-background hover:shadow-gray-400 hover:text-green-500 ">Perhaps Refresh! </Button>
+        <Button
+          onClick={fetchHospitals}
+          className="rounded-full bg-background shadow shadow-green-600 text-xl text-green-600 hover:shadow-gray-400"
+        >
+          Refresh
+        </Button>
         <p className="text-[9px] text-red-500">{error}</p>
       </main>
-    );
+    )
 
   return (
     <main className="min-h-screen bg-gray-50 p-6 space-y-8">
@@ -147,107 +178,114 @@ export function HospitalPartners() {
           <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
           <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
         </div>
-        <Button className="bg-blue-200 text-blue-600 cursor-pointer hover:bg-blue-200 rounded-lg px-4 py-2 hover:text-blue-400">
+        <Button className="bg-blue-200 text-blue-600 cursor-pointer rounded-lg px-4 py-2">
           Hospice::Colony Algo. Aided Transfers
         </Button>
       </header>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {hospitals.map(hospital => {
-          const availableBedsCount = hospital.availableBeds;
-          const occupiedBeds = hospital.totalBeds - availableBedsCount - (hospital.maintenanceBeds ?? 0);
-
-          return (
-            <Card key={hospital.id} className="shadow-lg rounded-2xl p-6 flex flex-col justify-between">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <HospitalIcon className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <CardTitle
-                        className="text-lg font-semibold cursor-pointer hover:underline"
-                        onClick={() => setModalHospital(hospital)}
-                      >
-                        {hospital.name}
-                      </CardTitle>
-                      {hospital.location && (
-                        <p className="text-sm flex items-center gap-1 text-gray-500">
-                          <MapPinIcon className="h-3 w-3" /> {hospital.location}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <Badge
-                    variant={hospital.status === "active" ? "default" : "secondary"}
-                    className={`px-2 py-1 text-xs ${
-                      hospital.status === "Active"
-                        ? "bg-green-500 hover:bg-green-600"
-                        : "bg-gray-400 hover:bg-gray-500 text-white"
-                    }`}
-                  >
-                    {hospital.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4 mt-4">
-                <div className="grid grid-cols-4 gap-4 text-center">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Beds</p>
-                    <p className="text-lg font-semibold text-gray-900">{hospital.totalBeds}</p>
+        {hospitals.map(hospital => (
+          <Card key={hospital.id} className="shadow-lg rounded-2xl p-6 flex flex-col justify-between">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <HospitalIcon className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Available</p>
-                    <p className="text-lg font-semibold text-green-600">{availableBedsCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Occupied</p>
-                    <p className="text-lg font-semibold text-red-600">{occupiedBeds}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Maintenance</p>
-                    <p className="text-lg font-semibold text-yellow-600">{hospital.maintenanceBeds ?? 0}</p>
+                    <CardTitle
+                      className="text-lg font-semibold cursor-pointer hover:underline"
+                      onClick={() => setModalHospital(hospital)}
+                    >
+                      {hospital.name}
+                    </CardTitle>
+                    {hospital.location && (
+                      <p className="text-sm flex items-center gap-1 text-gray-500">
+                        <MapPinIcon className="h-3 w-3" /> {hospital.location}
+                      </p>
+                    )}
                   </div>
                 </div>
+                <Badge
+                  className={`px-2 py-1 text-xs ${
+                    hospital.status === "active"
+                      ? "bg-green-500 hover:bg-green-600"
+                      : "bg-gray-400 hover:bg-gray-500 text-white"
+                  }`}
+                >
+                  {hospital.status}
+                </Badge>
+              </div>
+            </CardHeader>
 
+            <CardContent className="space-y-4 mt-4">
+              <div className="grid grid-cols-4 gap-4 text-center">
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Specialties</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Array.from(new Set(["General", ...(hospital.specialties ?? [])])).map(specialty => (
-                      <button
-                        key={`${hospital.id}-${specialty}`}
-                        className={`px-2 py-1 rounded-full text-xs transition-colors ${
-                          selectedWard[hospital.id] === specialty
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                        }`}
-                        onClick={() => setSelectedWard(prev => ({ ...prev, [hospital.id]: specialty }))}
-                      >
-                        {specialty.replace(/_/g, " ")}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-sm text-gray-500">Total Beds</p>
+                  <p className="text-lg font-semibold text-gray-900">{hospital.totalBeds}</p>
                 </div>
-              </CardContent>
+                <div>
+                  <p className="text-sm text-gray-500">Available</p>
+                  <p className="text-lg font-semibold text-green-600">{hospital.availableBeds}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Occupied</p>
+                  <p className="text-lg font-semibold text-red-600">{hospital.occupiedBeds}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Maintenance</p>
+                  <p className="text-lg font-semibold text-yellow-600">{hospital.maintenanceBeds}</p>
+                </div>
+              </div>
 
-              <footer className="flex justify-between items-center mt-4 border-t pt-3 text-sm text-gray-500">
-                <span className="flex items-center gap-1">
-                  <PhoneIcon className="h-3 w-3" /> {hospital.phone}
-                </span>
-                <div className="flex gap-2">
-                  <Button className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500">
-                    Admission
-                  </Button>
-                  <Button className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-500">
-                    Optimize
-                  </Button>
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Specialties</p>
+                <div className="flex flex-wrap gap-2">
+                  {hospital.specialties.map(s => (
+                    <button
+                      key={`${hospital.id}-${s}`}
+                      className={`px-2 py-1 rounded-full text-xs transition-colors ${
+                        selectedWard[hospital.id] === s
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                      onClick={() =>
+                        setSelectedWard(prev => ({
+                          ...prev,
+                          [hospital.id]: s
+                        }))
+                      }
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
-              </footer>
-            </Card>
-          );
-        })}
+              </div>
+            </CardContent>
+
+            <footer className="flex justify-between items-center mt-4 border-t pt-3 text-sm text-gray-500">
+              <span className="flex items-center gap-1">
+                <PhoneIcon className="h-3 w-3" /> {hospital.phone}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500"
+                  onClick={() => {
+                    setTransferFromHospital(hospital)
+                    setTransferFromWards(hospital.wards.map(w => w.name))
+                    setTransferOpen(true)
+                  }}
+                >
+                  Transfer
+                </Button>
+
+                <Button className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-500">
+                  Optimize
+                </Button>
+              </div>
+            </footer>
+          </Card>
+        ))}
       </section>
 
       {modalHospital && user && (
@@ -260,6 +298,17 @@ export function HospitalPartners() {
           onUpdate={handleUpdateHospital}
         />
       )}
+
+      {transferOpen && transferFromHospital && (
+        <TransferModal
+          open={transferOpen}
+          onClose={() => setTransferOpen(false)}
+          hospitals={hospitals}
+          fromHospital={transferFromHospital}
+          fromWards={transferFromWards}
+          onSubmit={() => setTransferOpen(false)}
+        />
+      )}
     </main>
-  );
+  )
 }
