@@ -6,210 +6,186 @@ import { Textarea } from './ui/textarea';
 import { Bed, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 
-export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }) {
-  const [wards, setWards] = useState([]);
-  const [beds, setBeds] = useState([]);
+type BedRecord = {
+  id: string;
+  wardId: string;
+  bedNumber: number;
+  status: 'available' | 'occupied' | 'maintenance';
+};
+
+type WardRecord = {
+  id: string;
+  name: string;
+  specialty: string;
+  notes: string;
+  totalBeds: number;
+  availableBeds: number;
+  occupiedBeds: number;
+  maintenanceBeds: number;
+};
+
+type Props = {
+  hospitalId: string;
+  canEdit: boolean;
+  onWardsChange?: (wards: WardRecord[]) => void;
+};
+
+export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props) {
+  const [wards, setWards] = useState<WardRecord[]>([]);
+  const [beds, setBeds] = useState<BedRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openBeds, setOpenBeds] = useState({});
+  const [openBeds, setOpenBeds] = useState<Record<string, boolean>>({});
 
   const load = async () => {
     setLoading(true);
     try {
-      const [wRes, bRes] = await Promise.all([
-        fetch(`/api/hospitals/${hospitalId}/wards`, { cache: 'no-store' }),
-        fetch(`/api/hospitals/${hospitalId}/beds`, { cache: 'no-store' })
-      ]);
-      const wJson = wRes.ok ? await wRes.json() : { wards: [] };
-      const bJson = bRes.ok ? await bRes.json() : { beds: [] };
+      const wRes = await fetch(`/api/hospitals/${hospitalId}/wards`, { cache: 'no-store' });
+      const bRes = await fetch(`/api/hospitals/${hospitalId}/beds`, { cache: 'no-store' });
+
+      const wJson = await wRes.json();
+      const bJson = await bRes.json();
+
       let wardList = Array.isArray(wJson.wards) ? wJson.wards : [];
       const bedList = Array.isArray(bJson.beds) ? bJson.beds : [];
 
-      if (!wardList.some(x => String((x.name || '')).toLowerCase() === 'general')) {
-        const res = await fetch(`/api/hospitals/${hospitalId}/wards`, {
+      if (!wardList.some(w => w.name?.toLowerCase() === 'general')) {
+        const create = await fetch(`/api/hospitals/${hospitalId}/wards`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: 'General', specialty: 'General' })
         });
-        if (res.ok) {
-          const created = await res.json();
-          wardList = Array.isArray(created) ? created : [created, ...wardList];
-          if (!Array.isArray(created)) wardList.unshift(created);
+        if (create.ok) {
+          const newOne = await create.json();
+          wardList = Array.isArray(newOne) ? newOne : [newOne, ...wardList];
         }
       }
 
-      const merged = wardList.map(w => {
-        const id = w.id ?? w.id ?? Math.random().toString(36).slice(2);
-        const safeName = typeof w.name === 'string' ? w.name : '';
-        const wb = bedList.filter(b => String(b.wardId) === String(w.id));
+      const merged = wardList.map((w: any) => {
+        const wb = bedList.filter((b: any) => String(b.wardId) === String(w.id));
+
         return {
           ...w,
-          id,
-          name: safeName,
-          totalBeds: Number(wb.length || w.totalBeds || 0),
-          availableBeds: Number(wb.filter(b => b.status === 'available').length || w.availableBeds || 0),
-          occupiedBeds: Number(wb.filter(b => b.status === 'occupied').length || w.occupiedBeds || 0),
-          maintenanceBeds: Number(wb.filter(b => b.status === 'maintenance').length || w.maintenanceBeds || 0)
+          totalBeds: wb.length,
+          availableBeds: wb.filter((b: any) => b.status === 'available').length,
+          occupiedBeds: wb.filter((b: any) => b.status === 'occupied').length,
+          maintenanceBeds: wb.filter((b: any) => b.status === 'maintenance').length
         };
       });
 
       setWards(merged);
       setBeds(bedList);
       onWardsChange?.(merged);
-    } catch (e) {
+    } catch {
       toast.error('Failed loading wards/beds');
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
-    if (!hospitalId) return;
-    load();
+    if (hospitalId) load();
   }, [hospitalId]);
 
-  const syncBeds = async (wardId, total, available, occupied, maintenance) => {
-    const existing = beds.filter(b => String(b.wardId) === String(wardId)).map(b => ({ ...b, bedNumber: Number(b.bedNumber) }));
-    const need = [];
-    for (let i = 0; i < available; i++) need.push({ status: 'available' });
-    for (let i = 0; i < occupied; i++) need.push({ status: 'occupied' });
-    for (let i = 0; i < maintenance; i++) need.push({ status: 'maintenance' });
-    while (need.length < total) need.push({ status: 'available' });
-    while (need.length > total) need.pop();
-    const normalized = need.map((n, i) => ({ bedNumber: i + 1, status: n.status }));
-    const toDelete = existing.filter(e => !normalized.some(n => n.bedNumber === Number(e.bedNumber)));
-    const toUpsert = normalized.map(n => {
-      const existingBed = existing.find(e => Number(e.bedNumber) === Number(n.bedNumber));
-      return { existing: existingBed, data: n };
+  const commitBeds = async (ward: WardRecord) => {
+    const existing = beds.filter(b => b.wardId === ward.id);
+
+    const desired: { bedNumber: number; status: string }[] = [];
+    for (let i = 0; i < ward.availableBeds; i++) desired.push({ status: 'available', bedNumber: desired.length + 1 });
+    for (let i = 0; i < ward.occupiedBeds; i++) desired.push({ status: 'occupied', bedNumber: desired.length + 1 });
+    for (let i = 0; i < ward.maintenanceBeds; i++) desired.push({ status: 'maintenance', bedNumber: desired.length + 1 });
+
+    while (desired.length < ward.totalBeds)
+      desired.push({ status: 'available', bedNumber: desired.length + 1 });
+
+    const deleteList = existing.filter(e => !desired.some(d => d.bedNumber === e.bedNumber));
+    const createList = desired.filter(d => !existing.some(e => e.bedNumber === d.bedNumber));
+    const updateList = desired.filter(d => {
+      const ex = existing.find(e => e.bedNumber === d.bedNumber);
+      return ex && ex.status !== d.status;
     });
 
-    for (const d of toDelete) {
-      try {
-        await fetch(`/api/hospitals/${hospitalId}/beds`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bedId: d.id })
-        });
-      } catch {}
+    for (const d of deleteList) {
+      await fetch(`/api/hospitals/${hospitalId}/beds`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bedId: d.id })
+      });
     }
 
-    const createBatch = [];
-    for (const u of toUpsert) {
-      if (!u.existing) {
-        createBatch.push({
-          wardId,
-          bedNumber: String(u.data.bedNumber),
-          status: u.data.status
-        });
-      } else {
-        try {
-          await fetch(`/api/hospitals/${hospitalId}/beds`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: u.existing.id,
-              wardId,
-              bedNumber: String(u.data.bedNumber),
-              status: u.data.status
-            })
-          });
-        } catch {}
-      }
+    if (createList.length) {
+      await fetch(`/api/hospitals/${hospitalId}/beds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          createList.map(d => ({ wardId: ward.id, bedNumber: d.bedNumber, status: d.status }))
+        )
+      });
     }
 
-    if (createBatch.length) {
-      try {
-        await fetch(`/api/hospitals/${hospitalId}/beds`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createBatch)
-        });
-      } catch {}
+    for (const u of updateList) {
+      const ex = existing.find(e => e.bedNumber === u.bedNumber);
+      if (!ex) continue;
+      await fetch(`/api/hospitals/${hospitalId}/beds`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ex.id, wardId: ward.id, bedNumber: u.bedNumber, status: u.status })
+      });
     }
-
-    await load();
   };
 
-  const editCounts = (wardId, field, value) => {
-    const num = Math.max(0, parseInt(String(value || '0'), 10));
+  const updateWardDB = async (ward: WardRecord) => {
+    await fetch(`/api/hospitals/${hospitalId}/wards`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ward)
+    });
+  };
+
+  const editField = (wardId: string, field: keyof WardRecord, val: string) => {
+    const num = Math.max(0, Number(val) || 0);
     setWards(prev =>
       prev.map(w => {
-        if (String(w.id) !== String(wardId)) return w;
-        const copy = { ...w };
-        if (field === 'totalBeds') {
-          copy.totalBeds = num;
-          const fixed = Number(copy.occupiedBeds || 0) + Number(copy.maintenanceBeds || 0);
-          copy.availableBeds = Math.max(0, copy.totalBeds - fixed);
-        } else {
-          copy[field] = num;
-          copy.totalBeds = Number(copy.availableBeds || 0) + Number(copy.occupiedBeds || 0) + Number(copy.maintenanceBeds || 0);
-        }
-        return copy;
+        if (w.id !== wardId) return w;
+        const updated = { ...w, [field]: num };
+        updated.totalBeds =
+          updated.availableBeds + updated.occupiedBeds + updated.maintenanceBeds;
+        return updated;
       })
     );
   };
 
-  const commitCounts = wardId => {
-    const ward = wards.find(w => String(w.id) === String(wardId));
+  const saveCounts = async (wardId: string) => {
+    const ward = wards.find(w => w.id === wardId);
     if (!ward) return;
-    syncBeds(ward.id, Number(ward.totalBeds || 0), Number(ward.availableBeds || 0), Number(ward.occupiedBeds || 0), Number(ward.maintenanceBeds || 0));
+    await commitBeds(ward);
+    await updateWardDB(ward);
+    load();
   };
 
   const addWard = async () => {
-    try {
-      await fetch(`/api/hospitals/${hospitalId}/wards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'New Ward', specialty: 'New Ward' })
-      });
-      await load();
-    } catch {
-      toast.error('Failed to add ward');
-    }
+    await fetch(`/api/hospitals/${hospitalId}/wards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'New Ward', specialty: 'New Ward' })
+    });
+    load();
   };
 
-  const updateWard = async wardId => {
-    const ward = wards.find(w => String(w.id) === String(wardId));
-    if (!ward) return;
-    try {
-      await fetch(`/api/hospitals/${hospitalId}/wards`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: ward.id, name: ward.name || '', specialty: ward.specialty || '', notes: ward.notes || '' })
-      });
-      await load();
-    } catch {
-      toast.error('Failed to update ward');
-    }
-  };
-
-  const deleteWard = async id => {
-    try {
-      await fetch(`/api/hospitals/${hospitalId}/wards`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wardId: id })
-      });
-      await load();
-    } catch {
-      toast.error('Failed to delete ward');
-    }
-  };
-
-  const toggleBeds = id => {
-    setOpenBeds(prev => ({ ...prev, [id]: !prev[id] }));
+  const deleteWard = async (wardId: string) => {
+    await fetch(`/api/hospitals/${hospitalId}/wards`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wardId })
+    });
+    load();
   };
 
   if (loading)
-    return (
-      <div className="p-6 text-center text-gray-500 italic">
-        Loading ward and bed data...
-      </div>
-    );
+    return <div className="p-6 text-center text-gray-500 italic">Loading...</div>;
 
   return (
     <section className="p-4 border rounded-lg bg-white mt-4">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-semibold text-blue-600">Wards & Beds Management</h3>
+      <div className="flex justify-between mb-4">
+        <h3 className="text-xl font-semibold text-blue-600">Wards & Beds</h3>
         {canEdit && (
           <Button onClick={addWard} className="bg-blue-600 text-white">
             <Plus className="h-4 w-4 mr-1" /> Add Ward
@@ -218,111 +194,86 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }) {
       </div>
 
       <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-        {wards.length === 0 && <div className="text-center italic text-gray-400">No wards available.</div>}
-
-        {wards.map((ward, idx) => (
-          <div key={ward.id ?? `ward-${idx}`} className="p-3 border rounded-lg bg-gray-50">
-            <div className="flex justify-between items-center mb-2">
+        {wards.map(ward => (
+          <div key={ward.id} className="p-3 border rounded-lg bg-gray-50">
+            <div className="flex justify-between">
               <div className="flex items-center">
                 <Bed className="h-5 w-5 mr-2 text-red-500" />
                 <Input
-                  type="text"
-                  value={ward.name ?? ''}
+                  value={ward.name}
                   disabled={!canEdit}
                   onChange={e =>
                     setWards(prev =>
-                      prev.map(w => (String(w.id) === String(ward.id) ? { ...w, name: e.target.value, specialty: e.target.value } : w))
+                      prev.map(w =>
+                        w.id === ward.id ? { ...w, name: e.target.value } : w
+                      )
                     )
                   }
-                  onBlur={() => updateWard(ward.id)}
+                  onBlur={() => updateWardDB(ward)}
                   className="h-8 p-0 border-none bg-transparent font-bold"
                 />
               </div>
 
-              {canEdit && String((ward.name || '').toLowerCase()) !== 'general' && (
+              {canEdit && ward.name.toLowerCase() !== 'general' && (
                 <Button size="sm" variant="destructive" onClick={() => deleteWard(ward.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+            <div className="grid grid-cols-4 gap-2 mt-3 text-sm">
               <div>
-                <label className="text-xs font-medium">TOTAL BEDS</label>
-                <Input
-                  type="number"
-                  value={String(ward.totalBeds ?? 0)}
-                  disabled={!canEdit}
-                  onChange={e => editCounts(ward.id, 'totalBeds', e.target.value)}
-                  onBlur={() => commitCounts(ward.id)}
-                  className="mt-1 h-8"
-                />
+                <label className="text-xs font-medium">TOTAL</label>
+                <Input value={ward.totalBeds} disabled className="mt-1 h-8" />
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-green-600">AVAILABLE</label>
-                <Input
-                  type="number"
-                  value={String(ward.availableBeds ?? 0)}
-                  disabled={!canEdit}
-                  onChange={e => editCounts(ward.id, 'availableBeds', e.target.value)}
-                  onBlur={() => commitCounts(ward.id)}
-                  className="mt-1 h-8"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-red-600">OCCUPIED</label>
-                <Input
-                  type="number"
-                  value={String(ward.occupiedBeds ?? 0)}
-                  disabled={!canEdit}
-                  onChange={e => editCounts(ward.id, 'occupiedBeds', e.target.value)}
-                  onBlur={() => commitCounts(ward.id)}
-                  className="mt-1 h-8"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-yellow-600">MAINTENANCE</label>
-                <Input
-                  type="number"
-                  value={String(ward.maintenanceBeds ?? 0)}
-                  disabled={!canEdit}
-                  onChange={e => editCounts(ward.id, 'maintenanceBeds', e.target.value)}
-                  onBlur={() => commitCounts(ward.id)}
-                  className="mt-1 h-8"
-                />
-              </div>
+              {[
+                ['availableBeds', 'AVAILABLE', 'text-green-600'],
+                ['occupiedBeds', 'OCCUPIED', 'text-red-600'],
+                ['maintenanceBeds', 'MAINTENANCE', 'text-yellow-600']
+              ].map(([key, label, color]) => (
+                <div key={key}>
+                  <label className={`text-xs font-medium ${color}`}>{label}</label>
+                  <Input
+                    type="number"
+                    value={(ward as any)[key]}
+                    disabled={!canEdit}
+                    onChange={e => editField(ward.id, key as any, e.target.value)}
+                    onBlur={() => saveCounts(ward.id)}
+                    className="mt-1 h-8"
+                  />
+                </div>
+              ))}
             </div>
 
             <Textarea
-              value={ward.notes ?? ''}
+              value={ward.notes}
               disabled={!canEdit}
-              onChange={e => setWards(prev => prev.map(w => (String(w.id) === String(ward.id) ? { ...w, notes: e.target.value } : w)))}
-              onBlur={() => updateWard(ward.id)}
+              onChange={e =>
+                setWards(prev =>
+                  prev.map(w => (w.id === ward.id ? { ...w, notes: e.target.value } : w))
+                )
+              }
+              onBlur={() => updateWardDB(ward)}
               rows={1}
-              className="mb-2"
+              className="mt-2"
             />
 
             <button
-              onClick={() => toggleBeds(ward.id)}
-              className="flex items-center gap-2 text-blue-600 font-semibold"
+              onClick={() => setOpenBeds(prev => ({ ...prev, [ward.id]: !prev[ward.id] }))}
+              className="flex items-center gap-2 text-blue-600 font-semibold mt-2"
             >
               {openBeds[ward.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              View Beds
+              Beds
             </button>
 
             {openBeds[ward.id] && (
-              <ul className="pl-4 mt-2 space-y-1">
-                {beds.filter(b => String(b.wardId) === String(ward.id)).map(bed => (
-                  <li key={bed.id} className="flex justify-between items-center p-2 bg-white border rounded">
-                    #{bed.bedNumber} — {bed.status}
+              <ul className="mt-2 space-y-1">
+                {beds.filter(b => b.wardId === ward.id).map(b => (
+                  <li key={b.id} className="p-2 border bg-white rounded">
+                    #{b.bedNumber} — {b.status}
                   </li>
                 ))}
-                {beds.filter(b => String(b.wardId) === String(ward.id)).length === 0 && (
-                  <li className="italic text-gray-400">No beds in this ward.</li>
-                )}
               </ul>
             )}
           </div>

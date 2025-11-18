@@ -86,8 +86,6 @@ export function HospitalPartners() {
     try {
       setLoading(true)
       const res = await fetch("/api/hospitals", { cache: "no-store" })
-      if (!res.ok) throw new Error("Failed to fetch hospitals")
-
       const { hospitals } = await res.json()
 
       const enriched: Hospital[] = []
@@ -99,8 +97,8 @@ export function HospitalPartners() {
         const wardData = await wardsRes.json()
         const bedData = await bedsRes.json()
 
-        const wards: Ward[] = Array.isArray(wardData.wards) ? wardData.wards : []
-        const beds: Bed[] = Array.isArray(bedData.beds) ? bedData.beds : []
+        const wards: Ward[] = wardData.wards || []
+        const beds: Bed[] = bedData.beds || []
 
         const total = beds.length
         const available = beds.filter(b => b.status === "available").length
@@ -115,7 +113,6 @@ export function HospitalPartners() {
           maintenanceBeds: maintenance,
           wards,
           specialties: Array.from(new Set(["General", ...wards.map(w => w.name)]))
-
         })
       }
 
@@ -145,7 +142,7 @@ export function HospitalPartners() {
             <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
             <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
           </div>
-          <Button className="bg-blue-200 text-blue-600 cursor-pointer rounded-lg px-4 py-2">
+          <Button className="bg-blue-200 text-blue-600 rounded-lg px-4 py-2">
             Hospice::Colony Algo. Aided Transfers
           </Button>
         </header>
@@ -163,7 +160,7 @@ export function HospitalPartners() {
       <main className="min-h-screen flex flex-col items-center justify-center gap-4">
         <Button
           onClick={fetchHospitals}
-          className="rounded-full bg-background shadow shadow-green-600 text-xl text-green-600 hover:shadow-gray-400"
+          className="rounded-full bg-background shadow shadow-green-600 text-xl text-green-600"
         >
           Refresh
         </Button>
@@ -178,7 +175,7 @@ export function HospitalPartners() {
           <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
           <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
         </div>
-        <Button className="bg-blue-200 text-blue-600 cursor-pointer rounded-lg px-4 py-2">
+        <Button className="bg-blue-200 text-blue-600 rounded-lg px-4 py-2">
           Hospice::Colony Algo. Aided Transfers
         </Button>
       </header>
@@ -209,8 +206,8 @@ export function HospitalPartners() {
                 <Badge
                   className={`px-2 py-1 text-xs ${
                     hospital.status === "active"
-                      ? "bg-green-500 hover:bg-green-600"
-                      : "bg-gray-400 hover:bg-gray-500 text-white"
+                      ? "bg-green-500"
+                      : "bg-gray-400 text-white"
                   }`}
                 >
                   {hospital.status}
@@ -244,10 +241,10 @@ export function HospitalPartners() {
                   {hospital.specialties.map(s => (
                     <button
                       key={`${hospital.id}-${s}`}
-                      className={`px-2 py-1 rounded-full text-xs transition-colors ${
+                      className={`px-2 py-1 rounded-full text-xs ${
                         selectedWard[hospital.id] === s
                           ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          : "bg-gray-200 text-gray-700"
                       }`}
                       onClick={() =>
                         setSelectedWard(prev => ({
@@ -268,22 +265,26 @@ export function HospitalPartners() {
                 <PhoneIcon className="h-3 w-3" /> {hospital.phone}
               </span>
               <div className="flex gap-2">
-                <Button
-                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500"
-                  onClick={() => {
-                    setTransferFromHospital(hospital)
-                    setTransferFromWards(hospital.wards.map(w => w.name))
-                    setTransferOpen(true)
-                  }}
-                >
-                  Transfer
-                </Button>
+                {userRole === "admin" && hospital.id === userHospitalId && (
+                  <Button
+                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500"
+                    onClick={() => {
+                      const wardList = Array.isArray(hospital.wards) ? hospital.wards : [];
+                      setTransferFromHospital(hospital);
+                      setTransferFromWards(wardList.map(w => w.name));
+                      setTransferOpen(true);
+                    }}
+                  >
+                    Transfer
+                  </Button>
+                )}
 
                 <Button className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-500">
                   Optimize
                 </Button>
               </div>
             </footer>
+
           </Card>
         ))}
       </section>
