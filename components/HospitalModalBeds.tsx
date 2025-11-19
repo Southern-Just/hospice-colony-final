@@ -1,16 +1,17 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Bed, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { toast } from 'sonner';
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Bed, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { toast } from "sonner";
 
 type BedRecord = {
   id: string;
   wardId: string;
   bedNumber: number;
-  status: 'available' | 'occupied' | 'maintenance';
+  status: "available" | "occupied" | "maintenance";
 };
 
 type WardRecord = {
@@ -37,46 +38,38 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
   const [openBeds, setOpenBeds] = useState<Record<string, boolean>>({});
 
   const load = async () => {
-    setLoading(true);
     try {
-      const wRes = await fetch(`/api/hospitals/${hospitalId}/wards`, { cache: 'no-store' });
-      const bRes = await fetch(`/api/hospitals/${hospitalId}/beds`, { cache: 'no-store' });
+      setLoading(true);
 
-      const wJson = await wRes.json();
-      const bJson = await bRes.json();
+      const wRes = await fetch(`/api/hospitals/${hospitalId}/wards`, { cache: "no-store" });
+      const bRes = await fetch(`/api/hospitals/${hospitalId}/beds`, { cache: "no-store" });
 
-      let wardList = Array.isArray(wJson.wards) ? wJson.wards : [];
-      const bedList = Array.isArray(bJson.beds) ? bJson.beds : [];
+      const { wards: wJson } = await wRes.json();
+      const { beds: bJson } = await bRes.json();
 
-      if (!wardList.some(w => w.name?.toLowerCase() === 'general')) {
-        const create = await fetch(`/api/hospitals/${hospitalId}/wards`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'General', specialty: 'General' })
-        });
-        if (create.ok) {
-          const newOne = await create.json();
-          wardList = Array.isArray(newOne) ? newOne : [newOne, ...wardList];
-        }
-      }
+      let wardList = Array.isArray(wJson) ? wJson : [];
+      const bedList = Array.isArray(bJson) ? bJson : [];
 
-      const merged = wardList.map((w: any) => {
-        const wb = bedList.filter((b: any) => String(b.wardId) === String(w.id));
+      wardList = wardList.filter((w) => w.name?.toLowerCase() !== "general");
+
+      const merged = wardList.map((w) => {
+        const wb = bedList.filter((b) => String(b.wardId) === String(w.id));
 
         return {
           ...w,
           totalBeds: wb.length,
-          availableBeds: wb.filter((b: any) => b.status === 'available').length,
-          occupiedBeds: wb.filter((b: any) => b.status === 'occupied').length,
-          maintenanceBeds: wb.filter((b: any) => b.status === 'maintenance').length
+          availableBeds: wb.filter((b) => b.status === "available").length,
+          occupiedBeds: wb.filter((b) => b.status === "occupied").length,
+          maintenanceBeds: wb.filter((b) => b.status === "maintenance").length,
         };
       });
 
       setWards(merged);
       setBeds(bedList);
+
       onWardsChange?.(merged);
     } catch {
-      toast.error('Failed loading wards/beds');
+      toast.error("Failed loading wards/beds");
     }
     setLoading(false);
   };
@@ -85,77 +78,102 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
     if (hospitalId) load();
   }, [hospitalId]);
 
-  const commitBeds = async (ward: WardRecord) => {
-    const existing = beds.filter(b => b.wardId === ward.id);
+  // ---------------------------------------
+  // CRUD LOGIC
+  // ---------------------------------------
 
-    const desired: { bedNumber: number; status: string }[] = [];
-    for (let i = 0; i < ward.availableBeds; i++) desired.push({ status: 'available', bedNumber: desired.length + 1 });
-    for (let i = 0; i < ward.occupiedBeds; i++) desired.push({ status: 'occupied', bedNumber: desired.length + 1 });
-    for (let i = 0; i < ward.maintenanceBeds; i++) desired.push({ status: 'maintenance', bedNumber: desired.length + 1 });
+  const commitBeds = async (ward: WardRecord) => {
+    const existing = beds.filter((b) => b.wardId === ward.id);
+
+    const desired: { status: string; bedNumber: number }[] = [];
+    for (let i = 0; i < ward.availableBeds; i++)
+      desired.push({ status: "available", bedNumber: desired.length + 1 });
+    for (let i = 0; i < ward.occupiedBeds; i++)
+      desired.push({ status: "occupied", bedNumber: desired.length + 1 });
+    for (let i = 0; i < ward.maintenanceBeds; i++)
+      desired.push({ status: "maintenance", bedNumber: desired.length + 1 });
 
     while (desired.length < ward.totalBeds)
-      desired.push({ status: 'available', bedNumber: desired.length + 1 });
+      desired.push({ status: "available", bedNumber: desired.length + 1 });
 
-    const deleteList = existing.filter(e => !desired.some(d => d.bedNumber === e.bedNumber));
-    const createList = desired.filter(d => !existing.some(e => e.bedNumber === d.bedNumber));
-    const updateList = desired.filter(d => {
-      const ex = existing.find(e => e.bedNumber === d.bedNumber);
+    const deletes = existing.filter((e) => !desired.some((d) => d.bedNumber === e.bedNumber));
+    const creates = desired.filter((d) => !existing.some((e) => e.bedNumber === d.bedNumber));
+    const updates = desired.filter((d) => {
+      const ex = existing.find((e) => e.bedNumber === d.bedNumber);
       return ex && ex.status !== d.status;
     });
 
-    for (const d of deleteList) {
+    for (const d of deletes) {
       await fetch(`/api/hospitals/${hospitalId}/beds`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bedId: d.id })
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bedId: d.id }),
       });
     }
 
-    if (createList.length) {
+    if (creates.length) {
       await fetch(`/api/hospitals/${hospitalId}/beds`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          createList.map(d => ({ wardId: ward.id, bedNumber: d.bedNumber, status: d.status }))
-        )
+          creates.map((d) => ({
+            wardId: ward.id,
+            bedNumber: d.bedNumber,
+            status: d.status,
+          }))
+        ),
       });
     }
 
-    for (const u of updateList) {
-      const ex = existing.find(e => e.bedNumber === u.bedNumber);
+    for (const u of updates) {
+      const ex = existing.find((e) => e.bedNumber === u.bedNumber);
       if (!ex) continue;
+
       await fetch(`/api/hospitals/${hospitalId}/beds`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: ex.id, wardId: ward.id, bedNumber: u.bedNumber, status: u.status })
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: ex.id,
+          wardId: ward.id,
+          bedNumber: u.bedNumber,
+          status: u.status,
+        }),
       });
     }
   };
 
   const updateWardDB = async (ward: WardRecord) => {
     await fetch(`/api/hospitals/${hospitalId}/wards`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ward)
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ward),
     });
   };
 
-  const editField = (wardId: string, field: keyof WardRecord, val: string) => {
+  const editField = (wardId: string, key: keyof WardRecord, val: string) => {
     const num = Math.max(0, Number(val) || 0);
-    setWards(prev =>
-      prev.map(w => {
+
+    setWards((prev) =>
+      prev.map((w) => {
         if (w.id !== wardId) return w;
-        const updated = { ...w, [field]: num };
-        updated.totalBeds =
-          updated.availableBeds + updated.occupiedBeds + updated.maintenanceBeds;
-        return updated;
+
+        const newW = {
+          ...w,
+          [key]: num,
+        };
+
+        newW.totalBeds =
+          newW.availableBeds + newW.occupiedBeds + newW.maintenanceBeds;
+
+        return newW;
       })
     );
   };
 
   const saveCounts = async (wardId: string) => {
-    const ward = wards.find(w => w.id === wardId);
+    const ward = wards.find((w) => w.id === wardId);
     if (!ward) return;
+
     await commitBeds(ward);
     await updateWardDB(ward);
     load();
@@ -163,21 +181,25 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
 
   const addWard = async () => {
     await fetch(`/api/hospitals/${hospitalId}/wards`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'New Ward', specialty: 'New Ward' })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "New Ward", specialty: "New Ward" }),
     });
     load();
   };
 
   const deleteWard = async (wardId: string) => {
     await fetch(`/api/hospitals/${hospitalId}/wards`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wardId })
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wardId }),
     });
     load();
   };
+
+  // ---------------------------------------
+  // UI
+  // ---------------------------------------
 
   if (loading)
     return <div className="p-6 text-center text-gray-500 italic">Loading...</div>;
@@ -186,25 +208,28 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
     <section className="p-4 border rounded-lg bg-white mt-4">
       <div className="flex justify-between mb-4">
         <h3 className="text-xl font-semibold text-blue-600">Wards & Beds</h3>
+
         {canEdit && (
           <Button onClick={addWard} className="bg-blue-600 text-white">
-            <Plus className="h-4 w-4 mr-1" /> Add Ward
+            <Plus className="h-4 w-4 mr-1" />
+            Add Ward
           </Button>
         )}
       </div>
 
       <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-        {wards.map(ward => (
+        {wards.map((ward) => (
           <div key={ward.id} className="p-3 border rounded-lg bg-gray-50">
             <div className="flex justify-between">
               <div className="flex items-center">
                 <Bed className="h-5 w-5 mr-2 text-red-500" />
+
                 <Input
                   value={ward.name}
                   disabled={!canEdit}
-                  onChange={e =>
-                    setWards(prev =>
-                      prev.map(w =>
+                  onChange={(e) =>
+                    setWards((prev) =>
+                      prev.map((w) =>
                         w.id === ward.id ? { ...w, name: e.target.value } : w
                       )
                     )
@@ -214,8 +239,12 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
                 />
               </div>
 
-              {canEdit && ward.name.toLowerCase() !== 'general' && (
-                <Button size="sm" variant="destructive" onClick={() => deleteWard(ward.id)}>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => deleteWard(ward.id)}
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               )}
@@ -228,17 +257,22 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
               </div>
 
               {[
-                ['availableBeds', 'AVAILABLE', 'text-green-600'],
-                ['occupiedBeds', 'OCCUPIED', 'text-red-600'],
-                ['maintenanceBeds', 'MAINTENANCE', 'text-yellow-600']
+                ["availableBeds", "AVAILABLE", "text-green-600"],
+                ["occupiedBeds", "OCCUPIED", "text-red-600"],
+                ["maintenanceBeds", "MAINTENANCE", "text-yellow-600"],
               ].map(([key, label, color]) => (
                 <div key={key}>
-                  <label className={`text-xs font-medium ${color}`}>{label}</label>
+                  <label className={`text-xs font-medium ${color}`}>
+                    {label}
+                  </label>
+
                   <Input
                     type="number"
                     value={(ward as any)[key]}
                     disabled={!canEdit}
-                    onChange={e => editField(ward.id, key as any, e.target.value)}
+                    onChange={(e) =>
+                      editField(ward.id, key as keyof WardRecord, e.target.value)
+                    }
                     onBlur={() => saveCounts(ward.id)}
                     className="mt-1 h-8"
                   />
@@ -249,9 +283,11 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
             <Textarea
               value={ward.notes}
               disabled={!canEdit}
-              onChange={e =>
-                setWards(prev =>
-                  prev.map(w => (w.id === ward.id ? { ...w, notes: e.target.value } : w))
+              onChange={(e) =>
+                setWards((prev) =>
+                  prev.map((w) =>
+                    w.id === ward.id ? { ...w, notes: e.target.value } : w
+                  )
                 )
               }
               onBlur={() => updateWardDB(ward)}
@@ -260,20 +296,28 @@ export function HospitalModalBeds({ hospitalId, canEdit, onWardsChange }: Props)
             />
 
             <button
-              onClick={() => setOpenBeds(prev => ({ ...prev, [ward.id]: !prev[ward.id] }))}
+              onClick={() =>
+                setOpenBeds((prev) => ({ ...prev, [ward.id]: !prev[ward.id] }))
+              }
               className="flex items-center gap-2 text-blue-600 font-semibold mt-2"
             >
-              {openBeds[ward.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {openBeds[ward.id] ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
               Beds
             </button>
 
             {openBeds[ward.id] && (
               <ul className="mt-2 space-y-1">
-                {beds.filter(b => b.wardId === ward.id).map(b => (
-                  <li key={b.id} className="p-2 border bg-white rounded">
-                    #{b.bedNumber} — {b.status}
-                  </li>
-                ))}
+                {beds
+                  .filter((b) => b.wardId === ward.id)
+                  .map((b) => (
+                    <li key={b.id} className="p-2 border bg-white rounded">
+                      #{b.bedNumber} — {b.status}
+                    </li>
+                  ))}
               </ul>
             )}
           </div>

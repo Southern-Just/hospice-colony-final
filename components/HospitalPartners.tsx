@@ -28,30 +28,20 @@ function ShimmerCard() {
 
       <CardContent className="space-y-4 mt-4">
         <div className="grid grid-cols-4 gap-4 text-center">
-          <div className="space-y-2">
-            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
-            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
-          </div>
-          <div className="space-y-2">
-            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
-            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
-          </div>
-          <div className="space-y-2">
-            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
-            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
-          </div>
-          <div className="space-y-2">
-            <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
-            <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
-          </div>
+          {[1,2,3,4].map(i => (
+            <div key={i} className="space-y-2">
+              <div className="h-3 w-14 bg-gray-200 mx-auto rounded" />
+              <div className="h-5 w-10 bg-gray-300 mx-auto rounded" />
+            </div>
+          ))}
         </div>
 
         <div>
           <div className="h-3 w-20 bg-gray-200 rounded mb-2" />
           <div className="flex flex-wrap gap-2">
-            <div className="h-6 w-16 bg-gray-200 rounded-full" />
-            <div className="h-6 w-12 bg-gray-200 rounded-full" />
-            <div className="h-6 w-20 bg-gray-200 rounded-full" />
+            {[1,2,3].map(i => (
+              <div key={i} className="h-6 w-16 bg-gray-200 rounded-full" />
+            ))}
           </div>
         </div>
       </CardContent>
@@ -107,6 +97,7 @@ export function HospitalPartners() {
 
         enriched.push({
           ...h,
+          beds,   // ⭐ needed for ward filtering logic
           totalBeds: total,
           availableBeds: available,
           occupiedBeds: occupied,
@@ -142,7 +133,7 @@ export function HospitalPartners() {
             <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
             <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
           </div>
-          <Button className="bg-blue-200 text-blue-600 rounded-lg px-4 py-2">
+          <Button className="bg-blue-200  text-blue-600 rounded-lg px-4 py-2 hover:bg-blue-100">
             Hospice::Colony Algo. Aided Transfers
           </Button>
         </header>
@@ -181,112 +172,131 @@ export function HospitalPartners() {
       </header>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {hospitals.map(hospital => (
-          <Card key={hospital.id} className="shadow-lg rounded-2xl p-6 flex flex-col justify-between">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <HospitalIcon className="h-5 w-5 text-blue-600" />
+        {hospitals.map(hospital => {
+          /** ⭐ WARD FILTERING LOGIC ⭐ */
+
+          const activeWard = selectedWard[hospital.id];
+          let displayBeds = hospital.beds || [];
+
+          if (activeWard && activeWard !== "General") {
+            const wardObj = hospital.wards?.find(w => w.name === activeWard);
+            if (wardObj) {
+              displayBeds = displayBeds.filter(b => b.wardId === wardObj.id);
+            }
+          }
+
+          const totalBeds = displayBeds.length;
+          const availableBeds = displayBeds.filter(b => b.status === "available").length;
+          const occupiedBeds = displayBeds.filter(b => b.status === "occupied").length;
+          const maintenanceBeds = displayBeds.filter(b => b.status === "maintenance").length;
+
+          return (
+            <Card key={hospital.id} className="shadow-lg rounded-2xl p-6 flex flex-col justify-between">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <HospitalIcon className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <CardTitle
+                        className="text-lg font-semibold cursor-pointer hover:text-gray-600"
+                        onClick={() => setModalHospital(hospital)}
+                      >
+                        {hospital.name}
+                      </CardTitle>
+                      {hospital.location && (
+                        <p className="text-sm flex items-center gap-1 text-gray-500">
+                          <MapPinIcon className="h-3 w-3" /> {hospital.location}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Badge
+                    className={`px-2 py-1 text-xs ${
+                      hospital.status === "active"
+                        ? "bg-background text-green-600"
+                        : "bg-gray-400 text-white"
+                    }`}
+                  >
+                    {hospital.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-4 mt-4">
+                {/* ⭐ WARD-SPECIFIC or HOSPITAL TOTALS ⭐ */}
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Beds</p>
+                    <p className="text-lg font-semibold text-gray-900">{totalBeds}</p>
                   </div>
                   <div>
-                    <CardTitle
-                      className="text-lg font-semibold cursor-pointer hover:underline"
-                      onClick={() => setModalHospital(hospital)}
-                    >
-                      {hospital.name}
-                    </CardTitle>
-                    {hospital.location && (
-                      <p className="text-sm flex items-center gap-1 text-gray-500">
-                        <MapPinIcon className="h-3 w-3" /> {hospital.location}
-                      </p>
-                    )}
+                    <p className="text-sm text-gray-500">Available</p>
+                    <p className="text-lg font-semibold text-green-600">{availableBeds}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Occupied</p>
+                    <p className="text-lg font-semibold text-red-600">{occupiedBeds}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Maintenance</p>
+                    <p className="text-lg font-semibold text-yellow-600">{maintenanceBeds}</p>
                   </div>
                 </div>
-                <Badge
-                  className={`px-2 py-1 text-xs ${
-                    hospital.status === "active"
-                      ? "bg-green-500"
-                      : "bg-gray-400 text-white"
-                  }`}
-                >
-                  {hospital.status}
-                </Badge>
-              </div>
-            </CardHeader>
 
-            <CardContent className="space-y-4 mt-4">
-              <div className="grid grid-cols-4 gap-4 text-center">
                 <div>
-                  <p className="text-sm text-gray-500">Total Beds</p>
-                  <p className="text-lg font-semibold text-gray-900">{hospital.totalBeds}</p>
+                  <p className="text-sm text-gray-500 mb-1">Specialties</p>
+                  <div className="flex flex-wrap gap-2">
+                    {hospital.specialties.map(s => (
+                      <button
+                        key={`${hospital.id}-${s}`}
+                        className={`px-2 py-1 rounded-full text-xs ${
+                          selectedWard[hospital.id] === s
+                            ? "bg-blue-200 text-blue-700"
+                            : "bg-gray-200 text-gray-700"
+                        }`}
+                        onClick={() =>
+                          setSelectedWard(prev => ({
+                            ...prev,
+                            [hospital.id]: s
+                          }))
+                        }
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Available</p>
-                  <p className="text-lg font-semibold text-green-600">{hospital.availableBeds}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Occupied</p>
-                  <p className="text-lg font-semibold text-red-600">{hospital.occupiedBeds}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Maintenance</p>
-                  <p className="text-lg font-semibold text-yellow-600">{hospital.maintenanceBeds}</p>
-                </div>
-              </div>
+              </CardContent>
 
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Specialties</p>
-                <div className="flex flex-wrap gap-2">
-                  {hospital.specialties.map(s => (
-                    <button
-                      key={`${hospital.id}-${s}`}
-                      className={`px-2 py-1 rounded-full text-xs ${
-                        selectedWard[hospital.id] === s
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-700"
-                      }`}
-                      onClick={() =>
-                        setSelectedWard(prev => ({
-                          ...prev,
-                          [hospital.id]: s
-                        }))
-                      }
+              <footer className="flex justify-between items-center mt-4 border-t pt-3 text-sm text-gray-500">
+                <span className="flex items-center gap-1">
+                  <PhoneIcon className="h-3 w-3" /> {hospital.phone}
+                </span>
+                <div className="flex flex-row-reverse">
+                  {userRole === "admin" && hospital.id === userHospitalId && (
+                    <Button
+                      className="px-1 py-0 bg-transparent text-blue-500 border-l border-yellow-500 rounded-xs hover:bg-transparent hover:text-blue-400"
+                      onClick={() => {
+                        const wardList = Array.isArray(hospital.wards) ? hospital.wards : [];
+                        setTransferFromHospital(hospital);
+                        setTransferFromWards(wardList.map(w => w.name));
+                        setTransferOpen(true);
+                      }}
                     >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
+                      Transfer
+                    </Button>
+                  )}
 
-            <footer className="flex justify-between items-center mt-4 border-t pt-3 text-sm text-gray-500">
-              <span className="flex items-center gap-1">
-                <PhoneIcon className="h-3 w-3" /> {hospital.phone}
-              </span>
-              <div className="flex gap-2">
-                {userRole === "admin" && hospital.id === userHospitalId && (
-                  <Button
-                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500"
-                    onClick={() => {
-                      const wardList = Array.isArray(hospital.wards) ? hospital.wards : [];
-                      setTransferFromHospital(hospital);
-                      setTransferFromWards(wardList.map(w => w.name));
-                      setTransferOpen(true);
-                    }}
-                  >
-                    Transfer
+                  <Button className="px-1 py-1 underline-offset-2 bg-transparent text-green-500 hover:bg-transparent hover:text-green-400">
+                    Optimize
                   </Button>
-                )}
-
-                <Button className="px-3 py-1 bg-green-600 text-white text-xs rounded-full hover:bg-green-500">
-                  Optimize
-                </Button>
-              </div>
-            </footer>
-
-          </Card>
-        ))}
+                </div>
+              </footer>
+            </Card>
+          )
+        })}
       </section>
 
       {modalHospital && user && (
