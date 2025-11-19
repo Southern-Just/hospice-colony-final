@@ -103,16 +103,17 @@ export default function BedArrangement() {
 
   const statusCounts = useMemo(() => {
     const base = { available: 0, occupied: 0, maintenance: 0, reserved: 0 } as Record<BedStatus, number>
-    for (const b of visibleBeds) base[b.status]++
+    for (const b of beds) base[b.status]++
     return base
-  }, [visibleBeds])
+  }, [beds])
 
   const hospitalsInWard = useMemo(() => {
-    const ids = Array.from(new Set(visibleBeds.map(b => b.hospitalId)))
-    return hospitals.filter(h => ids.includes(h.id))
-  }, [visibleBeds, hospitals])
+    return hospitals.filter(h => h.id === selectedHospitalId)
+  }, [selectedHospitalId, hospitals])
 
-  const availableAtBottom = useMemo(() => visibleBeds.filter(b => b.status === "available"), [visibleBeds])
+  const availableAtBottom = useMemo(() => {
+    return beds.filter(b => b.hospitalId === selectedHospitalId && b.status === "available")
+  }, [beds, selectedHospitalId])
 
   const computeProbabilities = (bed: UIBed) => {
     const probs: number[] = []
@@ -148,32 +149,40 @@ export default function BedArrangement() {
     return probs.length - 1
   }
 
-  const optimizeArrangement = useCallback(() => {
-    setOldBeds(bedsRef.current.map(b => ({ ...b })))
-    setIsOptimizing(true)
-    pheromones.current = pheromones.current.map(p => Math.max(p * evaporation, 0.01))
-    const targetBeds = bedsRef.current.map(b => ({ ...b }))
-    const candidateMoves = targetBeds.map(b => {
-      const probs = computeProbabilities(b)
-      const norm = normalize(probs)
-      const chosen = selectIndexByProb(norm)
-      return { id: b.id, to: chosen }
-    })
-    const newBeds = targetBeds.map(tb => {
-      const move = candidateMoves.find(m => m.id === tb.id)
-      if (!move) return tb
-      const newStatus = Math.random() < 0.5 ? "occupied" : "available"
-      return { ...tb, positionIndex: move.to, status: newStatus }
-    })
-    setTimeout(() => {
-      setBeds(newBeds)
-      setTimeout(() => {
-        setIsOptimizing(false)
-        setOldBeds([])
-      }, 900)
-    }, 300)
-    toast.success("Best allocation simulated")
-  }, [])
+  const optimizeArrangement = useCallback(async () => {
+    try {
+      setIsOptimizing(true);
+
+      const payload = {
+        hospitalId: selectedHospitalId,
+        beds: beds.map(b => ({
+          id: b.id,
+          bedNumber: b.bedNumber,
+          ward: b.ward,
+          status: b.status,
+          positionIndex: b.positionIndex,
+          priority: b.priority
+        }))
+      };
+
+      const res = await fetch("/api/aco", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error("ACO failed");
+
+      const data = await res.json();
+
+      setBeds(data.optimizedBeds);   // ← ACO returns the new arrangement
+      toast.success("ACO optimization complete");
+    } catch (err) {
+      toast.error("ACO optimization failed");
+    } finally {
+      setIsOptimizing(false);
+    }
+  }, [beds, selectedHospitalId]);
 
   const enterEditMode = () => {
     if (!user) { toast.error("User not loaded"); return }
@@ -240,16 +249,6 @@ export default function BedArrangement() {
 
   return (
     <div className="space-y-6 relative">
-      <style>{`
-        .curve-path { stroke: rgba(0,0,0,.9); fill: none; stroke-linecap: round; stroke-linejoin: round; animation: curvePulse 1.6s ease-in-out infinite; }
-        .curve-dot { fill: #111; opacity: .95; }
-        @keyframes curvePulse { 0% { stroke-width: 1; stroke-opacity: .15 } 50% { stroke-width: 3; stroke-opacity: .9 } 100% { stroke-width: 1; stroke-opacity: .15 } }
-        @keyframes moveAlong { 0% { offset-distance: 0% } 100% { offset-distance: 100% } }
-        .moving-dot { offset-path: path(''); animation: moveAlong 1s linear forwards; }
-        .edit-cell { cursor: pointer; transition: background-color 0.1s; }
-        .edit-cell:hover { background-color: #e0f2f1; }
-      `}</style>
-
       <div className="flex items-start justify-between gap-6">
         <div className="mx-auto w-64 ml-2 space-y-4">
           <h2 className="text-xl font-bold">{isEditing ? "Beds to Place" : "Bed Overview"}</h2>
@@ -289,7 +288,7 @@ export default function BedArrangement() {
               <Card>
                 <CardHeader>
                   <CardTitle>Available Beds After Allocation</CardTitle>
-                  <CardDescription>Grouped by hospital</CardDescription>
+                  <CardDescription>Selected hospital only</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -344,33 +343,6 @@ export default function BedArrangement() {
             <CardHeader><CardTitle>{isEditing ? `Edit Layout for ${hospitals.find(h => h.id === selectedHospitalId)?.name}` : "Ward Grid"}</CardTitle></CardHeader>
             <CardContent>
               <div className="relative w-full h-full">
-                {isOptimizing && oldBeds.length > 0 && (
-                  <svg className="absolute inset-0 z-20 pointer-events-none" width="100%" height={GRID_ROWS * CELL_H}>
-                    {visibleBeds.map(b => {
-                      const old = oldBeds.find(o => o.id === b.id)
-                      if (!old || old.positionIndex === b.positionIndex) return null
-                      const p1 = getCellCoordinates(old.positionIndex)
-                      const p2 = getCellCoordinates(b.positionIndex)
-                      const c1x = p1.left + CELL_W * 0.5
-                      const c1y = p1.top + CELL_H * 0.5 - 40
-                      const c2x = p2.left + CELL_W * 0.5
-                      const c2y = p2.top + CELL_H * 0.5 - 40
-                      const d = `M ${p1.left + CELL_W * 0.5} ${p1.top + CELL_H * 0.5} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.left + CELL_W * 0.5} ${p2.top + CELL_H * 0.5}`
-                      const pathId = `path-${b.id}`
-                      return (
-                        <g key={b.id}>
-                          <path id={pathId} d={d} className="curve-path" />
-                          <circle className="curve-dot">
-                            <animateMotion dur="1s" repeatCount="1" fill="freeze">
-                              <mpath href={`#${pathId}`} />
-                            </animateMotion>
-                          </circle>
-                        </g>
-                      )
-                    })}
-                  </svg>
-                )}
-
                 <div className={`grid grid-cols-8 gap-4 p-4 ${isEditing ? 'border-4 border-dashed border-teal-300' : ''}`}>
                   {Array.from({ length: GRID_SIZE }).map((_, i) => {
                     const bed = visibleBeds.find(b => b.positionIndex === i)
