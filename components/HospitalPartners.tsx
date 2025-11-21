@@ -175,7 +175,7 @@ export function HospitalPartners() {
           <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
           <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
         </div>
-        <Button className="bg-blue-200 text-blue-600 rounded-lg px-4 py-2">
+        <Button className="bg-blue-200 text-blue-600 hover:bg-blue-100 rounded-lg px-4 py-2">
           Hospice::Colony Algo. Aided Transfers
         </Button>
       </header>
@@ -191,7 +191,7 @@ export function HospitalPartners() {
                   </div>
                   <div>
                     <CardTitle
-                      className="text-lg font-semibold cursor-pointer hover:underline"
+                      className="text-lg font-semibold cursor-pointer hover:text-gray-500"
                       onClick={() => setModalHospital(hospital)}
                     >
                       {hospital.name}
@@ -204,10 +204,10 @@ export function HospitalPartners() {
                   </div>
                 </div>
                 <Badge
-                  className={`px-2 py-1 text-xs ${
+                  className={`px-2 py-1 text-xs rounded-sm ${
                     hospital.status === "active"
-                      ? "bg-green-500"
-                      : "bg-gray-400 text-white"
+                      ? "bg-gray-200"
+                      : "bg-gray-600 text-white"
                   }`}
                 >
                   {hospital.status}
@@ -264,7 +264,7 @@ export function HospitalPartners() {
               <span className="flex items-center gap-1">
                 <PhoneIcon className="h-3 w-3" /> {hospital.phone}
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-row-reverse gap-2">
                 {userRole === "admin" && hospital.id === userHospitalId && (
                   <Button
                     className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500"

@@ -249,8 +249,8 @@ export default function TransferModal(props: {
 
         <CardContent className="px-6 pb-6 pt-4 space-y-4">
           <div className="grid gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-28 text-sm text-gray-600">Number</div>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-full text-sm text-gray-600">Number of Patients to transfer</div>
               <Input
                 type="number"
                 min={1}
@@ -262,8 +262,8 @@ export default function TransferModal(props: {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="text-sm text-gray-600">From Ward</div>
+              <div className="space-y-2 flex">
+                <div className="text-sm text-gray-600">From Ward ( where the bed is)</div>
                 <Select value={fromWard} onValueChange={setFromWard}>
                   <SelectTrigger />
                   <SelectContent>
@@ -276,7 +276,7 @@ export default function TransferModal(props: {
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 flex gap-2 w-full">
                 <div className="text-sm text-gray-600">To Facility</div>
                 <Select value={toHospital} onValueChange={setToHospital}>
                   <SelectTrigger />
@@ -291,9 +291,9 @@ export default function TransferModal(props: {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 flex w-full">
               <div className="text-sm text-gray-600">To Ward</div>
-              <Select value={toWard} onValueChange={setToWard}>
+              <div className=""><Select value={toWard} onValueChange={setToWard}>
                 <SelectTrigger />
                 <SelectContent>
                   {targetWards.length ? (
@@ -306,7 +306,7 @@ export default function TransferModal(props: {
                     <SelectItem value="">No wards</SelectItem>
                   )}
                 </SelectContent>
-              </Select>
+              </Select></div>
             </div>
 
             <div className="text-sm">
