@@ -1,0 +1,9 @@
+version: "3.8"
+
+services:
+  python-aco:
+    build: .
+    container_name: python-aco
+    ports:
+      - "8000:8000"
+    restart: always
