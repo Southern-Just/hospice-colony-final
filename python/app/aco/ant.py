@@ -1,13 +1,12 @@
-import numpy as np
+from typing import List
+import random
 
 class Ant:
-    def __init__(self, grid_size):
-        self.grid_size = grid_size
-        self.path = []
+    def __init__(self, bed_count: int):
+        self.assignment: List[int] = [-1] * bed_count
 
-    def choose_cell(self, pheromone_map, heuristic_map):
-        prob = pheromone_map * heuristic_map
-        prob = prob / np.sum(prob)
-        idx = np.random.choice(len(prob), p=prob)
-        self.path.append(idx)
-        return idx
+    def set_assignment(self, idx: int, pos: int):
+        self.assignment[idx] = pos
+
+    def get_assignment(self) -> List[int]:
+        return self.assignment

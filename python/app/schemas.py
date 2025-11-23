@@ -1,17 +1,15 @@
 from pydantic import BaseModel
-from typing import List
+from typing import Optional
 
-class Bed(BaseModel):
+class PositionObj(BaseModel):
+    x: int
+    y: int
+
+class ApiBed(BaseModel):
     id: str
-    bedNumber: str
-    ward: str
-    status: str
-    priority: str
-    positionIndex: int
-
-class ACORequest(BaseModel):
     hospitalId: str
-    beds: List[Bed]
-
-class ACOResponse(BaseModel):
-    optimizedBeds: List[Bed]
+    wardId: Optional[str] = None
+    bedNumber: str
+    status: Optional[str] = "available"
+    priority: Optional[str] = "normal"
+    position: Optional[PositionObj] = None

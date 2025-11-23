@@ -57,6 +57,13 @@
       "when": 1763380722375,
       "tag": "0007_high_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1763856038885,
+      "tag": "0008_lush_tarantula",
+      "breakpoints": true
     }
   ]
 }

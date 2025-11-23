@@ -1,10 +1,15 @@
-# TensorFlow training will go here later.
-# This file exists so Next.js API and ACO files see the same structure.
+from typing import List, Dict, Any
+from .optimizer import AntColonySolver
 
-class ACOTrainer:
-    def __init__(self):
-        pass
-
-    def train(self, dataset):
-        # TODO: add learning pipeline
-        pass
+def tune_parameters(beds_sample: List[Dict[str, Any]], experiments: int = 5):
+    best_conf = None
+    best_score = float("inf")
+    for n_ants in [20, 40, 80]:
+        for iters in [80, 150, 300]:
+            solver = AntColonySolver(num_ants=n_ants, iterations=iters)
+            sol = solver.solve(beds_sample)
+            score = solver._cost_of_solution(beds_sample, sol)
+            if score < best_score:
+                best_score = score
+                best_conf = {"num_ants": n_ants, "iterations": iters, "score": score}
+    return best_conf

@@ -9,6 +9,8 @@ import { HospitalModal } from "./HospitalModal"
 import { useAuth } from "@/components/contexts/AuthContext"
 import TransferModal from "@/components/TransferModal"
 import { Hospital, Ward, Bed } from "@/types"
+import { toast } from "sonner"
+import { fastOptimizeHospital } from "@/lib/aco/fastOptimizer" // ← NEW
 
 function ShimmerCard() {
   return (
@@ -72,6 +74,9 @@ export function HospitalPartners() {
   const userHospitalId = user?.hospitalId ?? ""
   const userRole = user?.role ?? ""
 
+  // NEW: track which hospital(s) are currently optimizing
+  const [optimizingHospitals, setOptimizingHospitals] = useState<Record<string, boolean>>({})
+
   const fetchHospitals = async () => {
     try {
       setLoading(true)
@@ -125,6 +130,48 @@ export function HospitalPartners() {
     fetchHospitals()
   }, [user?.hospitalId])
 
+  // --- NEW: Optimize handler (fast, auto-apply, no transfers) ---
+  const handleOptimize = async (hospital: Hospital) => {
+    if (!hospital?.id) return
+    const hid = hospital.id
+    if (optimizingHospitals[hid]) return
+
+    try {
+      setOptimizingHospitals(prev => ({ ...prev, [hid]: true }))
+      toast.promise(
+        (async () => {
+          const res = await fastOptimizeHospital(hid, {
+            targetAvailableRatio: 0.15,
+            maxConversions: 1,
+            autoApply: true
+          })
+
+          if (!res.success) {
+            throw new Error(res.message || "Optimization failed")
+          }
+
+          // refresh hospital list to reflect changes
+          await fetchHospitals()
+
+          return res
+        })(),
+        {
+          loading: "Optimizing…",
+          success: (res: any) => {
+            const count = res.changedCount ?? 0
+            return `Optimization applied — ${count} change(s).`
+          },
+          error: (err: any) => `Optimization failed: ${err?.message ?? String(err)}`
+        }
+      )
+    } catch (err) {
+      console.error("optimize error", err)
+    } finally {
+      setOptimizingHospitals(prev => ({ ...prev, [hid]: false }))
+    }
+  }
+  // -----------------------------------------------------------
+
   if (loading)
     return (
       <main className="min-h-screen bg-gray-50 p-6 space-y-8">
@@ -173,7 +220,6 @@ export function HospitalPartners() {
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {hospitals.map(hospital => {
-          /** ⭐ WARD FILTERING LOGIC ⭐ */
 
           const activeWard = selectedWard[hospital.id];
           let displayBeds = hospital.beds || [];
@@ -232,32 +278,6 @@ export function HospitalPartners() {
                     <p className="text-lg font-semibold text-gray-900">{totalBeds}</p>
                   </div>
                   <div>
-<<<<<<< HEAD
-                    <CardTitle
-                      className="text-lg font-semibold cursor-pointer hover:text-gray-500"
-                      onClick={() => setModalHospital(hospital)}
-                    >
-                      {hospital.name}
-                    </CardTitle>
-                    {hospital.location && (
-                      <p className="text-sm flex items-center gap-1 text-gray-500">
-                        <MapPinIcon className="h-3 w-3" /> {hospital.location}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <Badge
-                  className={`px-2 py-1 text-xs rounded-sm ${
-                    hospital.status === "active"
-                      ? "bg-gray-200"
-                      : "bg-gray-600 text-white"
-                  }`}
-                >
-                  {hospital.status}
-                </Badge>
-              </div>
-            </CardHeader>
-=======
                     <p className="text-sm text-gray-500">Available</p>
                     <p className="text-lg font-semibold text-green-600">{availableBeds}</p>
                   </div>
@@ -270,7 +290,6 @@ export function HospitalPartners() {
                     <p className="text-lg font-semibold text-yellow-600">{maintenanceBeds}</p>
                   </div>
                 </div>
->>>>>>> a3f2879f4bafecc2ffc43a3decb0a111dc88863d
 
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Specialties</p>
@@ -316,27 +335,12 @@ export function HospitalPartners() {
                     </Button>
                   )}
 
-<<<<<<< HEAD
-            <footer className="flex justify-between items-center mt-4 border-t pt-3 text-sm text-gray-500">
-              <span className="flex items-center gap-1">
-                <PhoneIcon className="h-3 w-3" /> {hospital.phone}
-              </span>
-              <div className="flex flex-row-reverse gap-2">
-                {userRole === "admin" && hospital.id === userHospitalId && (
                   <Button
-                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-500"
-                    onClick={() => {
-                      const wardList = Array.isArray(hospital.wards) ? hospital.wards : [];
-                      setTransferFromHospital(hospital);
-                      setTransferFromWards(wardList.map(w => w.name));
-                      setTransferOpen(true);
-                    }}
+                    className="px-1 py-1 underline-offset-2 bg-transparent text-green-500 hover:bg-transparent hover:text-green-400"
+                    onClick={() => handleOptimize(hospital)}
+                    disabled={!!optimizingHospitals[hospital.id]}
                   >
-                    Transfer
-=======
-                  <Button className="px-1 py-1 underline-offset-2 bg-transparent text-green-500 hover:bg-transparent hover:text-green-400">
-                    Optimize
->>>>>>> a3f2879f4bafecc2ffc43a3decb0a111dc88863d
+                    {optimizingHospitals[hospital.id] ? "Optimizing…" : "Optimize"}
                   </Button>
                 </div>
               </footer>

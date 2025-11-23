@@ -27,17 +27,46 @@ export function Dashboard({
   const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(occupiedBeds);
   const [displayTotalHospitals, setDisplayTotalHospitals] = useState(partneredHospitals);
 
-  const normalizeHospital = (h: any) => {
-    const rawSpecs =
-      Array.isArray(h.specialties)
-        ? h.specialties
-        : typeof h.specialties === "string"
-            ? (() => { try { return JSON.parse(h.specialties) } catch { return [h.specialties] } })()
-            : h.specialties
-                ? [String(h.specialties)]
-                : [];
+  const user =
+    typeof document !== 'undefined'
+      ? JSON.parse(localStorage.getItem('authUser') || '{}')
+      : {};
+  const userHospitalId = user?.hospitalId ?? '';
 
-    const specialties = Array.from(new Set(["General", ...rawSpecs]));
+  const loadCookie = (key: string) => {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.split('; ').find(r => r.startsWith(key + '='));
+    if (!match) return null;
+    try {
+      return JSON.parse(decodeURIComponent(match.split('=')[1]));
+    } catch {
+      return null;
+    }
+  };
+
+  const saveCookie = (key: string, value: any) => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${key}=${encodeURIComponent(
+      JSON.stringify(value)
+    )}; path=/; max-age=900`;
+  };
+
+  const normalizeHospital = (h: any) => {
+    const rawSpecs = Array.isArray(h.specialties)
+      ? h.specialties
+      : typeof h.specialties === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(h.specialties);
+          } catch {
+            return [h.specialties];
+          }
+        })()
+      : h.specialties
+      ? [String(h.specialties)]
+      : [];
+
+    const specialties = Array.from(new Set(['General', ...rawSpecs]));
 
     const beds: Bed[] = Array.isArray(h.beds) ? h.beds : [];
 
@@ -47,7 +76,7 @@ export function Dashboard({
       if (!wardMap[b.wardId]) {
         wardMap[b.wardId] = {
           id: b.wardId,
-          name: h.wards?.find((w: any) => w.id === b.wardId)?.name || "Ward",
+          name: h.wards?.find((w: any) => w.id === b.wardId)?.name || 'Ward',
           totalBeds: 0,
           availableBeds: 0,
           maintenanceBeds: 0,
@@ -55,15 +84,14 @@ export function Dashboard({
       }
       const w = wardMap[b.wardId];
       w.totalBeds += 1;
-      if (b.status === "available") w.availableBeds += 1;
-      if (b.status === "maintenance") w.maintenanceBeds += 1;
+      if (b.status === 'available') w.availableBeds += 1;
+      if (b.status === 'maintenance') w.maintenanceBeds += 1;
     });
 
     const wards = Object.values(wardMap);
-
     const totalBeds = beds.length;
-    const availableBeds = beds.filter(b => b.status === "available").length;
-    const occupiedBeds = beds.filter(b => b.status === "occupied").length;
+    const availableBeds = beds.filter(b => b.status === 'available').length;
+    const occupiedBeds = beds.filter(b => b.status === 'occupied').length;
 
     return { ...h, beds, wards, totalBeds, availableBeds, occupiedBeds, specialties };
   };
@@ -74,6 +102,14 @@ export function Dashboard({
       else {
         setInitialLoading(true);
         setError(null);
+      }
+
+      const cached = !opts?.refresh ? loadCookie('dashboard_hospitals') : null;
+
+      if (cached && Array.isArray(cached)) {
+        setHospitals(cached);
+        setInitialLoading(false);
+        if (!opts?.refresh) return;
       }
 
       const res = await fetch('/api/hospitals');
@@ -99,6 +135,7 @@ export function Dashboard({
       );
 
       setHospitals(hospitalsData);
+      saveCookie('dashboard_hospitals', hospitalsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error loading data');
     } finally {
@@ -116,7 +153,9 @@ export function Dashboard({
   const computedAvailableBeds = hospitals.reduce((sum, h) => sum + (h.availableBeds || 0), 0);
   const computedOccupiedBeds = hospitals.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
   const occupancyRate =
-    computedTotalBeds > 0 ? Math.round((computedOccupiedBeds / computedTotalBeds) * 100) : 0;
+    computedTotalBeds > 0
+      ? Math.round((computedOccupiedBeds / computedTotalBeds) * 100)
+      : 0;
 
   useEffect(() => {
     if (!initialLoading && hospitals.length) {
@@ -132,9 +171,10 @@ export function Dashboard({
       };
       animate();
     }
-  }, [initialLoading, hospitals, computedTotalBeds, computedAvailableBeds, computedOccupiedBeds, totalHospitals]);
+  }, [initialLoading, hospitals]);
 
-  const userHospital = hospitals[0] ?? { wards: [] };
+  const userHospital = hospitals.find(h => h.id === userHospitalId) ?? null;
+  const userWards = userHospital?.wards ?? [];
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-12 flex gap-10 relative">
@@ -146,6 +186,8 @@ export function Dashboard({
         @keyframes shimmer { 100% { transform: translateX(200%); } }
         .fade-in { animation: fadeIn 300ms ease both; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { scrollbar-width: none; }
       `}</style>
 
       {initialLoading && (
@@ -186,8 +228,8 @@ export function Dashboard({
         </section>
 
         <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {userHospital.wards?.length ? (
-            userHospital.wards.map((w) => (
+          {userWards.length ? (
+            userWards.map(w => (
               <div
                 key={w.id}
                 className="bg-white rounded-lg p-4 shadow border border-gray-200 text-center hover:shadow-md transition-all"
@@ -202,7 +244,9 @@ export function Dashboard({
               </div>
             ))
           ) : (
-            <p className="text-center text-gray-400 italic col-span-full">No wards data available</p>
+            <p className="text-center text-gray-400 italic col-span-full">
+              No wards available for your facility
+            </p>
           )}
         </section>
       </section>
@@ -218,15 +262,21 @@ export function Dashboard({
               <RefreshCw className={`h-4 w-4 ${sidebarLoading ? 'animate-spin text-blue-500' : ''}`} />
             </button>
           </div>
-          <div className="space-y-3">
-            {sidebarLoading ? (
+
+          <div
+            className="space-y-3 overflow-y-auto hide-scroll pr-1"
+            style={{ maxHeight: 'calc(100vh - 220px)' }}
+          >
+            {initialLoading || sidebarLoading ? (
               <>
-                <div className="h-24 shimmer" />
-                <div className="h-24 shimmer" />
-                <div className="h-24 shimmer" />
+                <div className="h-24 shimmer rounded-lg" />
+                <div className="h-24 shimmer rounded-lg" />
+                <div className="h-24 shimmer rounded-lg" />
+                <div className="h-24 shimmer rounded-lg" />
+                <div className="h-24 shimmer rounded-lg" />
               </>
             ) : (
-              hospitals.map((h) => {
+              hospitals.map(h => {
                 const free = h.availableBeds || 0;
                 const total = h.totalBeds || 0;
                 const rate = total > 0 ? Math.round(((total - free) / total) * 100) : 0;

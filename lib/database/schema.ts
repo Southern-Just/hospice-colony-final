@@ -167,9 +167,54 @@ export const allocationLogs = pgTable("allocation_logs", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 })
 
+/* ---------------- ACO RUNS ---------------- */
+export const acoRuns = pgTable("aco_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  hospitalId: uuid("hospital_id")
+    .notNull()
+    .references(() => hospitals.id, { onDelete: "cascade" }),
+
+  initiatorUserId: uuid("initiator_user_id")
+    .references(() => users.id, { onDelete: "set null" }),
+
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+
+  durationMs: integer("duration_ms"),                 // how long the simulation took
+  iterations: integer("iterations"),                  // number of iterations performed
+  bestScore: numeric("best_score"),                   // final optimization score
+  reservedSlot: integer("reserved_slot"),             // reserved position from algorithm
+  details: jsonb("details"),                           // raw info: {bedsBefore, bedsAfter}
+
+  status: varchar("status", { length: 50 })
+    .notNull()
+    .default("completed"),                             // running | completed | failed
+
+  createdAt: timestamp("created_at").defaultNow().notNull()
+})
+
+/* ---------------- ACO RUN EVENTS (Optional Detailed Log) ---------------- */
+export const acoRunEvents = pgTable("aco_run_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  runId: uuid("run_id")
+    .notNull()
+    .references(() => acoRuns.id, { onDelete: "cascade" }),
+
+  eventType: varchar("event_type", { length: 100 }).notNull(), // iteration_start, iteration_end, convergence, warning, placement, scoring
+  message: text("message"),
+  metadata: jsonb("metadata"),                                 // anything: {iteration: 4, score: 98.2}
+
+  timestamp: timestamp("timestamp").defaultNow().notNull()
+})
+
+
 /* ---------------- TYPES ---------------- */
 export type User = typeof users.$inferSelect
 export type Bed = typeof beds.$inferSelect
 export type Patient = typeof patients.$inferSelect
 export type AdmissionRequest = typeof admissionRequests.$inferSelect
 export type BedAllocation = typeof bedAllocations.$inferSelect
+export type AcoRun = typeof acoRuns.$inferSelect
+export type AcoRunEvent = typeof acoRunEvents.$inferSelect

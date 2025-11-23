@@ -254,92 +254,6 @@ export default function TransferModal(props: {
       >
         <h2 className="mb-6 text-xl font-semibold tracking-tight">Transfer Patients</h2>
 
-<<<<<<< HEAD
-        <CardContent className="px-6 pb-6 pt-4 space-y-4">
-          <div className="grid gap-4">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-full text-sm text-gray-600">Number of Patients to transfer</div>
-              <Input
-                type="number"
-                min={1}
-                value={count}
-                onChange={(e) => setCount(Math.max(1, Number(e.target.value)))}
-                className="max-w-[120px]"
-                disabled={isWorking}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2 flex">
-                <div className="text-sm text-gray-600">From Ward ( where the bed is)</div>
-                <Select value={fromWard} onValueChange={setFromWard}>
-                  <SelectTrigger />
-                  <SelectContent>
-                    {fromWards.map((w) => (
-                      <SelectItem key={w} value={w}>
-                        {w}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2 flex gap-2 w-full">
-                <div className="text-sm text-gray-600">To Facility</div>
-                <Select value={toHospital} onValueChange={setToHospital}>
-                  <SelectTrigger />
-                  <SelectContent>
-                    {hospitals.map((h) => (
-                      <SelectItem key={h.id} value={h.id}>
-                        {h.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2 flex w-full">
-              <div className="text-sm text-gray-600">To Ward</div>
-              <div className=""><Select value={toWard} onValueChange={setToWard}>
-                <SelectTrigger />
-                <SelectContent>
-                  {targetWards.length ? (
-                    targetWards.map((w: Ward) => (
-                      <SelectItem key={w.id} value={w.name}>
-                        {w.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="">No wards</SelectItem>
-                  )}
-                </SelectContent>
-              </Select></div>
-            </div>
-
-            <div className="text-sm">
-              <div className="font-medium text-gray-700">Suggestions</div>
-              <div className="text-xs text-gray-500 mt-2">
-                {facilitiesWithCapacity.length ? (
-                  <ul className="list-disc ml-5">
-                    {facilitiesWithCapacity.map((h) => (
-                      <li key={h.id}>{h.name} — {h.availableBeds ?? 0}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <span>No available facilities</span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="ghost" onClick={onClose} disabled={isWorking}>
-                Cancel
-              </Button>
-              <Button onClick={handleTransfer} disabled={isWorking}>
-                {isWorking ? "Transferring..." : "Transfer"}
-              </Button>
-=======
         <div className="space-y-5">
           <div className="flex gap-4">
             <label className="block text-gray-700 text-sm py-2">Number of transfers</label>
@@ -374,7 +288,6 @@ export default function TransferModal(props: {
                     </option>
                   ))}
               </select>
->>>>>>> a3f2879f4bafecc2ffc43a3decb0a111dc88863d
             </div>
           </div>
 
