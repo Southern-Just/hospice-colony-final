@@ -8,9 +8,10 @@ import { HospitalIcon, MapPinIcon, PhoneIcon } from "lucide-react"
 import { HospitalModal } from "./HospitalModal"
 import { useAuth } from "@/components/contexts/AuthContext"
 import TransferModal from "@/components/TransferModal"
+import AlgoTransferModal from "@/components/AlgoTransferModal"
 import { Hospital, Ward, Bed } from "@/types"
 import { toast } from "sonner"
-import { fastOptimizeHospital } from "@/lib/aco/fastOptimizer" // ← NEW
+import { fastOptimizeHospital } from "@/lib/aco/fastOptimizer"
 
 function ShimmerCard() {
   return (
@@ -71,10 +72,11 @@ export function HospitalPartners() {
   const [transferFromHospital, setTransferFromHospital] = useState<Hospital | null>(null)
   const [transferFromWards, setTransferFromWards] = useState<string[]>([])
 
+  const [algoOpen, setAlgoOpen] = useState(false)
+
   const userHospitalId = user?.hospitalId ?? ""
   const userRole = user?.role ?? ""
 
-  // NEW: track which hospital(s) are currently optimizing
   const [optimizingHospitals, setOptimizingHospitals] = useState<Record<string, boolean>>({})
 
   const fetchHospitals = async () => {
@@ -102,7 +104,7 @@ export function HospitalPartners() {
 
         enriched.push({
           ...h,
-          beds,   // ⭐ needed for ward filtering logic
+          beds,
           totalBeds: total,
           availableBeds: available,
           occupiedBeds: occupied,
@@ -130,7 +132,6 @@ export function HospitalPartners() {
     fetchHospitals()
   }, [user?.hospitalId])
 
-  // --- NEW: Optimize handler (fast, auto-apply, no transfers) ---
   const handleOptimize = async (hospital: Hospital) => {
     if (!hospital?.id) return
     const hid = hospital.id
@@ -146,13 +147,9 @@ export function HospitalPartners() {
             autoApply: true
           })
 
-          if (!res.success) {
-            throw new Error(res.message || "Optimization failed")
-          }
+          if (!res.success) throw new Error(res.message || "Optimization failed")
 
-          // refresh hospital list to reflect changes
           await fetchHospitals()
-
           return res
         })(),
         {
@@ -170,7 +167,6 @@ export function HospitalPartners() {
       setOptimizingHospitals(prev => ({ ...prev, [hid]: false }))
     }
   }
-  // -----------------------------------------------------------
 
   if (loading)
     return (
@@ -180,7 +176,7 @@ export function HospitalPartners() {
             <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
             <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
           </div>
-          <Button className="bg-blue-200  text-blue-600 rounded-lg px-4 py-2 hover:bg-blue-100">
+          <Button className="bg-blue-200  text-blue-600 rounded-lg px-4 py-2 hover:bg-blue-100" onClick={() => setAlgoOpen(true)}>
             Hospice::Colony Algo. Aided Transfers
           </Button>
         </header>
@@ -213,7 +209,7 @@ export function HospitalPartners() {
           <h1 className="text-3xl font-bold text-gray-900">Partner Hospitals</h1>
           <p className="text-gray-600 mt-1">Hospitals collaborating with Hospice::Colony</p>
         </div>
-        <Button className="bg-blue-200 text-blue-600 hover:bg-blue-100 rounded-lg px-4 py-2">
+        <Button className="bg-blue-200 text-blue-600 hover:bg-blue-100 rounded-lg px-4 py-2" onClick={() => setAlgoOpen(true)}>
           Hospice::Colony Algo. Aided Transfers
         </Button>
       </header>
@@ -271,7 +267,6 @@ export function HospitalPartners() {
               </CardHeader>
 
               <CardContent className="space-y-4 mt-4">
-                {/* ⭐ WARD-SPECIFIC or HOSPITAL TOTALS ⭐ */}
                 <div className="grid grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-sm text-gray-500">Total Beds</p>
@@ -368,6 +363,17 @@ export function HospitalPartners() {
           fromHospital={transferFromHospital}
           fromWards={transferFromWards}
           onSubmit={() => setTransferOpen(false)}
+        />
+      )}
+
+      {algoOpen && (
+        <AlgoTransferModal
+          open={algoOpen}
+          onClose={() => {
+            setAlgoOpen(false)
+            fetchHospitals()
+          }}
+          hospitalId={userHospitalId}
         />
       )}
     </main>
