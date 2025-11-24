@@ -145,7 +145,7 @@ export function Analytics() {
     if (!d) return false;
     return Date.now() - d.getTime() < 1000 * 60 * 60 * 24 * 7;
   }).length;
-  const healthPercent = Math.max(0, Math.min(100, Math.round((avgScore || 0))));
+  const healthPercent = Math.max(0, Math.min(100, Math.round(avgScore || 0)));
   const avgDurationMs = Math.round(
     runs.reduce((s, r) => s + (r.durationMs ?? 0), 0) / Math.max(1, runs.length)
   );
@@ -153,42 +153,11 @@ export function Analytics() {
   return (
     <div className="space-y-10">
       <div>
-        <h2 className="text-3xl font-bold">Simulation Console</h2>
+        <h2 className="text-xl font-bold">Simulation Console</h2>
         <p className="text-gray-600">ACO simulation runs, model scoring, system-wide optimization history</p>
       </div>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="border rounded-lg p-6 bg-white shadow-sm">
-          <h3 className="text-lg font-semibold">Total Simulations</h3>
-          <p className="text-gray-500 text-sm mb-4">All recorded optimization runs</p>
-          <div className="text-4xl font-bold">{totalRuns}</div>
-        </div>
 
-        <div className="border rounded-lg p-6 bg-white shadow-sm">
-          <h3 className="text-lg font-semibold">Model Health</h3>
-          <p className="text-gray-500 text-sm mb-4">Average scoring</p>
-          <div className="flex items-center gap-4">
-            <span className="text-4xl font-bold">{Number.isFinite(avgScore) ? `${Math.round(avgScore)}%` : "—"}</span>
-            <progress value={healthPercent} max={100} className="w-full h-3"></progress>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">Last run: {lastRun ? new Date(lastRun).toLocaleString() : "—"}</p>
-        </div>
-
-        <div className="border rounded-lg p-6 bg-white shadow-sm">
-          <h3 className="text-lg font-semibold">Performance</h3>
-          <p className="text-gray-500 text-sm mb-4">Speed and activity</p>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Average Duration</span>
-              <span>{avgDurationMs ? `${Math.round(avgDurationMs / 1000)}s` : "—"}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Runs This Week</span>
-              <span>{recentRuns}</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 border rounded-lg p-6 bg-white shadow-sm">
@@ -244,8 +213,12 @@ export function Analytics() {
                         <UserIcon className="h-4 w-4 text-gray-500" />
                         {r.initiator ?? "system"}
                       </td>
-                      <td className="p-2">{typeof r.score === "number" ? `${Math.round(r.score)}%` : "—"}</td>
-                      <td className="p-2">{r.durationMs ? `${Math.round((r.durationMs || 0) / 1000)}s` : "—"}</td>
+                      <td className="p-2">
+                        {typeof r.score === "number" ? `${Math.round(r.score)}%` : "—"}
+                      </td>
+                      <td className="p-2">
+                        {r.durationMs ? `${Math.round((r.durationMs || 0) / 1000)}s` : "—"}
+                      </td>
                       <td className="p-2">{d ? d.toLocaleString() : r.timestamp}</td>
                       <td className="p-2">{r.status}</td>
                     </tr>
@@ -312,6 +285,44 @@ export function Analytics() {
             </div>
           </div>
         </div>
+      </section>
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <div className="rounded-xl p-6 bg-white shadow transition-all hover:shadow-md">
+          <h3 className="text-lg font-semibold">Total Simulations</h3>
+          <p className="text-gray-500 text-sm mb-4">All recorded optimization runs</p>
+          <div className="text-4xl font-bold">{totalRuns}</div>
+        </div>
+
+        <div className="rounded-xl p-6 bg-white shadow transition-all hover:shadow-md">
+          <h3 className="text-lg font-semibold">Model Health</h3>
+          <p className="text-gray-500 text-sm mb-4">Average scoring</p>
+          <div className="flex items-center gap-4">
+            <span className="text-4xl font-bold">
+              {Number.isFinite(avgScore) ? `${Math.round(avgScore)}%` : "—"}
+            </span>
+            <progress value={healthPercent} max={100} className="w-full h-3"></progress>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Last run: {lastRun ? new Date(lastRun).toLocaleString() : "—"}
+          </p>
+        </div>
+
+        <div className="rounded-xl p-6 bg-white shadow transition-all hover:shadow-md">
+          <h3 className="text-lg font-semibold">Performance</h3>
+          <p className="text-gray-500 text-sm mb-4">Speed and activity</p>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Average Duration</span>
+              <span>{avgDurationMs ? `${Math.round(avgDurationMs / 1000)}s` : "—"}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Runs This Week</span>
+              <span>{recentRuns}</span>
+            </div>
+          </div>
+        </div>
+
       </section>
     </div>
   );

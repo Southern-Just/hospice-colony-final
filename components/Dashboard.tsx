@@ -1,55 +1,62 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { Loader, RefreshCw } from 'lucide-react';
-import { Hospital, Ward, Bed } from '@/types';
+import { useState, useEffect, useCallback } from 'react'
+import { Loader, RefreshCw } from 'lucide-react'
+import { Hospital, Bed, Ward } from '@/types'
 
 interface DashboardProps {
-  totalBeds: number;
-  availableBeds: number;
-  occupiedBeds: number;
-  partneredHospitals: number;
+  totalBeds: number
+  availableBeds: number
+  occupiedBeds: number
+  partneredHospitals: number
 }
 
 export function Dashboard({
   totalBeds,
   availableBeds,
   occupiedBeds,
-  partneredHospitals,
+  partneredHospitals
 }: DashboardProps) {
-  const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [sidebarLoading, setSidebarLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [hospitals, setHospitals] = useState<Hospital[]>([])
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [sidebarLoading, setSidebarLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const [displayTotalBeds, setDisplayTotalBeds] = useState(totalBeds);
-  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(availableBeds);
-  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(occupiedBeds);
-  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(partneredHospitals);
+  const [displayTotalBeds, setDisplayTotalBeds] = useState(totalBeds)
+  const [displayAvailableBeds, setDisplayAvailableBeds] = useState(availableBeds)
+  const [displayOccupiedBeds, setDisplayOccupiedBeds] = useState(occupiedBeds)
+  const [displayTotalHospitals, setDisplayTotalHospitals] = useState(partneredHospitals)
 
-  const user =
-    typeof document !== 'undefined'
-      ? JSON.parse(localStorage.getItem('authUser') || '{}')
-      : {};
-  const userHospitalId = user?.hospitalId ?? '';
+  const [detectedUser, setDetectedUser] = useState<any>(null)
+  const [userHospitalId, setUserHospitalId] = useState<string>('')
 
   const loadCookie = (key: string) => {
-    if (typeof document === 'undefined') return null;
-    const match = document.cookie.split('; ').find(r => r.startsWith(key + '='));
-    if (!match) return null;
+    if (typeof document === 'undefined') return null
+    const match = document.cookie.split('; ').find(r => r.startsWith(key + '='))
+    if (!match) return null
     try {
-      return JSON.parse(decodeURIComponent(match.split('=')[1]));
+      return JSON.parse(decodeURIComponent(match.split('=')[1]))
     } catch {
-      return null;
+      return null
     }
-  };
+  }
 
   const saveCookie = (key: string, value: any) => {
-    if (typeof document === 'undefined') return;
-    document.cookie = `${key}=${encodeURIComponent(
-      JSON.stringify(value)
-    )}; path=/; max-age=900`;
-  };
+    if (typeof document === 'undefined') return
+    document.cookie = `${key}=${encodeURIComponent(JSON.stringify(value))}; path=/; max-age=900`
+  }
+
+  const readUserFromStorage = () => {
+    if (typeof document === 'undefined') return null
+    try {
+      const ls = localStorage.getItem('authUser')
+      if (ls) return JSON.parse(ls)
+    } catch {}
+    try {
+      return loadCookie('authUser')
+    } catch {}
+    return null
+  }
 
   const normalizeHospital = (h: any) => {
     const rawSpecs = Array.isArray(h.specialties)
@@ -57,124 +64,154 @@ export function Dashboard({
       : typeof h.specialties === 'string'
       ? (() => {
           try {
-            return JSON.parse(h.specialties);
+            return JSON.parse(h.specialties)
           } catch {
-            return [h.specialties];
+            return [h.specialties]
           }
         })()
       : h.specialties
       ? [String(h.specialties)]
-      : [];
+      : []
 
-    const specialties = Array.from(new Set(['General', ...rawSpecs]));
+    const specialties = Array.from(new Set(['General', ...rawSpecs]))
+    const beds: Bed[] = Array.isArray(h.beds) ? h.beds : []
+    const wards: Ward[] = Array.isArray(h.wards) ? h.wards : []
 
-    const beds: Bed[] = Array.isArray(h.beds) ? h.beds : [];
+    const wardMap: Record<string, Ward> = {}
 
-    const wardMap: Record<string, Ward> = {};
+    wards.forEach(w => {
+      wardMap[w.id] = {
+        ...w,
+        totalBeds: 0,
+        availableBeds: 0,
+        maintenanceBeds: 0
+      }
+    })
 
     beds.forEach(b => {
-      if (!wardMap[b.wardId]) {
-        wardMap[b.wardId] = {
-          id: b.wardId,
-          name: h.wards?.find((w: any) => w.id === b.wardId)?.name || 'Ward',
-          totalBeds: 0,
-          availableBeds: 0,
-          maintenanceBeds: 0,
-        };
+      const w = wardMap[b.wardId]
+      if (w) {
+        w.totalBeds += 1
+        if (b.status === 'available') w.availableBeds += 1
+        if (b.status === 'maintenance') w.maintenanceBeds += 1
       }
-      const w = wardMap[b.wardId];
-      w.totalBeds += 1;
-      if (b.status === 'available') w.availableBeds += 1;
-      if (b.status === 'maintenance') w.maintenanceBeds += 1;
-    });
+    })
 
-    const wards = Object.values(wardMap);
-    const totalBeds = beds.length;
-    const availableBeds = beds.filter(b => b.status === 'available').length;
-    const occupiedBeds = beds.filter(b => b.status === 'occupied').length;
-
-    return { ...h, beds, wards, totalBeds, availableBeds, occupiedBeds, specialties };
-  };
-
-  const fetchDashboardData = async (opts?: { refresh?: boolean }) => {
-    try {
-      if (opts?.refresh) setSidebarLoading(true);
-      else {
-        setInitialLoading(true);
-        setError(null);
-      }
-
-      const cached = !opts?.refresh ? loadCookie('dashboard_hospitals') : null;
-
-      if (cached && Array.isArray(cached)) {
-        setHospitals(cached);
-        setInitialLoading(false);
-        if (!opts?.refresh) return;
-      }
-
-      const res = await fetch('/api/hospitals');
-      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
-      const json = await res.json();
-
-      const hospitalsData = await Promise.all(
-        (json.hospitals ?? []).map(async (h: any) => {
-          const [bedsRes, wardsRes] = await Promise.all([
-            fetch(`/api/hospitals/${h.id}/beds`),
-            fetch(`/api/hospitals/${h.id}/wards`),
-          ]);
-
-          const bedsJson = bedsRes.ok ? await bedsRes.json() : { beds: [] };
-          const wardsJson = wardsRes.ok ? await wardsRes.json() : { wards: [] };
-
-          return normalizeHospital({
-            ...h,
-            beds: bedsJson.beds || [],
-            wards: wardsJson.wards || [],
-          });
-        })
-      );
-
-      setHospitals(hospitalsData);
-      saveCookie('dashboard_hospitals', hospitalsData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error loading data');
-    } finally {
-      if (opts?.refresh) setSidebarLoading(false);
-      else setInitialLoading(false);
+    return {
+      ...h,
+      beds,
+      wards: Object.values(wardMap),
+      totalBeds: beds.length,
+      availableBeds: beds.filter(b => b.status === 'available').length,
+      occupiedBeds: beds.filter(b => b.status === 'occupied').length,
+      specialties
     }
-  };
+  }
+
+  const fetchUserIfNeeded = useCallback(async () => {
+    const fromStorage = readUserFromStorage()
+    if (fromStorage && fromStorage.hospitalId) {
+      setDetectedUser(fromStorage)
+      setUserHospitalId(String(fromStorage.hospitalId))
+      return
+    }
+    try {
+      const res = await fetch('/api/users/me')
+      if (!res.ok) return
+      const j = await res.json()
+      const userObj = j.user ?? j
+      setDetectedUser(userObj)
+      if (userObj.hospitalId) setUserHospitalId(String(userObj.hospitalId))
+    } catch {}
+  }, [])
+
+  const fetchDashboardData = useCallback(
+    async (opts?: { refresh?: boolean }) => {
+      try {
+        if (opts?.refresh) setSidebarLoading(true)
+        else {
+          setInitialLoading(true)
+          setError(null)
+        }
+
+        const cached = !opts?.refresh ? loadCookie('dashboard_hospitals') : null
+
+        if (cached && Array.isArray(cached)) {
+          setHospitals(cached)
+          setInitialLoading(false)
+          if (!opts?.refresh) return
+        }
+
+        const res = await fetch('/api/hospitals')
+        if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`)
+        const json = await res.json()
+
+        const hospitalsData = await Promise.all(
+          (json.hospitals ?? []).map(async (h: any) => {
+            const [bedsRes, wardsRes] = await Promise.all([
+              fetch(`/api/hospitals/${h.id}/beds`),
+              fetch(`/api/hospitals/${h.id}/wards`)
+            ])
+
+            const bedsJson = bedsRes.ok ? await bedsRes.json() : { beds: [] }
+            const wardsJson = wardsRes.ok ? await wardsRes.json() : { wards: [] }
+
+            return normalizeHospital({
+              ...h,
+              beds: bedsJson.beds ?? [],
+              wards: wardsJson.wards ?? []
+            })
+          })
+        )
+
+        setHospitals(hospitalsData)
+        saveCookie('dashboard_hospitals', hospitalsData)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error loading data')
+      } finally {
+        if (opts?.refresh) setSidebarLoading(false)
+        else setInitialLoading(false)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    fetchUserIfNeeded().then(() => fetchDashboardData())
+  }, [fetchUserIfNeeded, fetchDashboardData])
 
-  const totalHospitals = hospitals.length;
-  const computedTotalBeds = hospitals.reduce((sum, h) => sum + (h.totalBeds || 0), 0);
-  const computedAvailableBeds = hospitals.reduce((sum, h) => sum + (h.availableBeds || 0), 0);
-  const computedOccupiedBeds = hospitals.reduce((sum, h) => sum + (h.occupiedBeds || 0), 0);
-  const occupancyRate =
-    computedTotalBeds > 0
-      ? Math.round((computedOccupiedBeds / computedTotalBeds) * 100)
-      : 0;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const latest = readUserFromStorage()
+      if (latest && latest.hospitalId && String(latest.hospitalId) !== userHospitalId) {
+        setDetectedUser(latest)
+        setUserHospitalId(String(latest.hospitalId))
+      }
+    }, 1500)
+    return () => clearInterval(interval)
+  }, [userHospitalId])
+
+  const totalHospitals = hospitals.length
+  const computedTotalBeds = hospitals.reduce((s, h) => s + (h.totalBeds || 0), 0)
+  const computedAvailableBeds = hospitals.reduce((s, h) => s + (h.availableBeds || 0), 0)
+  const computedOccupiedBeds = hospitals.reduce((s, h) => s + (h.occupiedBeds || 0), 0)
+  const occupancyRate = computedTotalBeds > 0 ? Math.round((computedOccupiedBeds / computedTotalBeds) * 100) : 0
 
   useEffect(() => {
     if (!initialLoading && hospitals.length) {
-      const frames = 30;
-      let step = 0;
+      const frames = 30
+      let step = 0
       const animate = () => {
-        step++;
-        setDisplayTotalBeds(Math.round((step / frames) * computedTotalBeds));
-        setDisplayAvailableBeds(Math.round((step / frames) * computedAvailableBeds));
-        setDisplayOccupiedBeds(Math.round((step / frames) * computedOccupiedBeds));
-        setDisplayTotalHospitals(Math.round((step / frames) * totalHospitals));
-        if (step < frames) requestAnimationFrame(animate);
-      };
-      animate();
+        step++
+        setDisplayTotalBeds(Math.round((step / frames) * computedTotalBeds))
+        setDisplayAvailableBeds(Math.round((step / frames) * computedAvailableBeds))
+        setDisplayOccupiedBeds(Math.round((step / frames) * computedOccupiedBeds))
+        setDisplayTotalHospitals(Math.round((step / frames) * totalHospitals))
+        if (step < frames) requestAnimationFrame(animate)
+      }
+      animate()
     }
-  }, [initialLoading, hospitals]);
-
-  const userHospital = hospitals.find(h => h.id === userHospitalId) ?? null;
-  const userWards = userHospital?.wards ?? [];
+  }, [initialLoading, hospitals, computedTotalBeds, computedAvailableBeds, computedOccupiedBeds, totalHospitals])
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-12 flex gap-10 relative">
@@ -227,28 +264,7 @@ export function Dashboard({
           </div>
         </section>
 
-        <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {userWards.length ? (
-            userWards.map(w => (
-              <div
-                key={w.id}
-                className="bg-white rounded-lg p-4 shadow border border-gray-200 text-center hover:shadow-md transition-all"
-              >
-                <div className="font-semibold text-gray-800">{w.name}</div>
-                <div className="mt-2 text-xl font-bold">{w.totalBeds} Beds</div>
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>{w.availableBeds} Avail</span>
-                  <span>{w.maintenanceBeds} Maint</span>
-                  <span>{w.totalBeds} Total</span>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-gray-400 italic col-span-full">
-              No wards available for your facility
-            </p>
-          )}
-        </section>
+        <section className="mt-6"></section>
       </section>
 
       <aside className="hidden lg:block w-80">
@@ -277,10 +293,10 @@ export function Dashboard({
               </>
             ) : (
               hospitals.map(h => {
-                const free = h.availableBeds || 0;
-                const total = h.totalBeds || 0;
-                const rate = total > 0 ? Math.round(((total - free) / total) * 100) : 0;
-                const specialties = Array.isArray(h.specialties) ? h.specialties : [];
+                const free = h.availableBeds || 0
+                const total = h.totalBeds || 0
+                const rate = total > 0 ? Math.round(((total - free) / total) * 100) : 0
+                const specialties = Array.isArray(h.specialties) ? h.specialties : []
 
                 return (
                   <div key={h.id} className="bg-white rounded-lg p-4 shadow border border-gray-200 fade-in">
@@ -317,12 +333,12 @@ export function Dashboard({
                       </div>
                     )}
                   </div>
-                );
+                )
               })
             )}
           </div>
         </div>
       </aside>
     </main>
-  );
+  )
 }

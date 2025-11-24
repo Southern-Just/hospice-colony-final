@@ -1,16 +1,5 @@
-import {
-  pgTable,
-  pgEnum,
-  text,
-  timestamp,
-  uuid,
-  varchar,
-  boolean,
-  jsonb,
-  numeric,
-  integer,
-  unique
-} from "drizzle-orm/pg-core"
+import {  pgTable,  pgEnum,  text,  timestamp,  uuid,  varchar,  boolean,
+  jsonb,  numeric,  integer,  unique } from "drizzle-orm/pg-core"
 
 export const bedStatusEnum = pgEnum("bed_status", [
   "available",
@@ -30,10 +19,10 @@ export const hospitals = pgTable("hospitals", {
   phone: varchar("phone", { length: 20 }),
   email: varchar("email", { length: 255 }),
   website: varchar("website", { length: 255 }),
-  specialties: jsonb("specialties"),          // ["ICU","General","Pediatrics"]
-  geoCoordinates: jsonb("geo_coordinates"),   // {lat: number, lng: number}
-  capacity: integer("capacity"),              // optional: total physical bed capacity
-  status: varchar("status", { length: 50 }),   // active, inactive, maintenance, overloaded
+  specialties: jsonb("specialties"),     
+  geoCoordinates: jsonb("geo_coordinates"), 
+  capacity: integer("capacity"),   
+  status: varchar("status", { length: 50 }),
   notes: varchar("notes", { length: 500 }),
   createdBy: varchar("created_by", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -44,38 +33,31 @@ export const hospitals = pgTable("hospitals", {
 export const wards = pgTable("wards", {
   id: uuid("id").defaultRandom().primaryKey(),
   hospitalId: uuid("hospital_id").notNull().references(() => hospitals.id, { onDelete: "cascade" }),
-  name: varchar("name", { length: 100 }).notNull(),   // e.g. ICU, General, Surgical
-  specialty: varchar("specialty", { length: 100 }),   // optional extra specialty mapping
-  capacity: integer("capacity"),                      // number of beds ward *should* hold
-  acuityLevel: varchar("acuity_level", { length: 50 }), // ICU, HDU, MED, GEN
-  constraints: jsonb("constraints"),                 // e.g. {"noChildren": true}
+  name: varchar("name", { length: 100 }).notNull(), 
+  specialty: varchar("specialty", { length: 100 }),
+  capacity: integer("capacity"),         
+  acuityLevel: varchar("acuity_level", { length: 50 }), 
+  constraints: jsonb("constraints"),               
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
 /* ---------------- BEDS ---------------- */
 export const beds = pgTable("beds", {
   id: uuid("id").defaultRandom().primaryKey(),
-
   hospitalId: uuid("hospital_id")
     .notNull()
     .references(() => hospitals.id, { onDelete: "cascade" }),
-
   wardId: uuid("ward_id")
     .references(() => wards.id, { onDelete: "set null" }),
-
   bedNumber: varchar("bed_number", { length: 50 }).notNull(),
-
   status: bedStatusEnum("status")
     .notNull()
     .default("available"),
-
   priority: varchar("priority", { length: 50 }).notNull(),
-
   position: jsonb("position").notNull(), 
   features: jsonb("features"),
   constraints: jsonb("constraints"),
   costFactor: numeric("cost_factor"),
-
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
@@ -100,18 +82,16 @@ export const patients = pgTable("patients", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   requiredSpecialty: varchar("required_specialty", { length: 100 }).notNull(),
-  acuityLevel: varchar("acuity_level", { length: 50 }),     // high, medium, low
+  acuityLevel: varchar("acuity_level", { length: 50 }), 
   weight: numeric("weight"),
-  needs: jsonb("needs"),                                    // {"oxygen":true,"isolation":true}
-  constraints: jsonb("constraints"),                        // {"noSharedRoom":true}
-
+  needs: jsonb("needs"),                      
+  constraints: jsonb("constraints"),                        
   hospitalId: uuid("hospital_id").references(() => hospitals.id),
   wardId: uuid("ward_id").references(() => wards.id),
   bedId: uuid("bed_id").references(() => beds.id),
 
   createdAt: timestamp("created_at").defaultNow().notNull()
 })
-
 /* ---------------- SESSIONS ---------------- */
 export const sessions = pgTable("sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -123,17 +103,13 @@ export const sessions = pgTable("sessions", {
 /* ---------------- TRANSFER REQUESTS ---------------- */
 export const transferRequests = pgTable("transfer_requests", {
   id: uuid("id").defaultRandom().primaryKey(),
-
   fromHospitalId: uuid("from_hospital_id").notNull().references(() => hospitals.id),
   toHospitalId: uuid("to_hospital_id").references(() => hospitals.id),
-
   fromWardId: uuid("from_ward_id").references(() => wards.id),
   toWardId: uuid("to_ward_id").references(() => wards.id),
-
   count: integer("count").notNull(),
   reason: text("reason"),
   status: varchar("status", { length: 50 }).default("pending"),
-
   createdAt: timestamp("created_at").defaultNow().notNull()
 })
 
@@ -154,7 +130,7 @@ export const bedAllocations = pgTable("bed_allocations", {
   requestId: uuid("request_id").notNull().references(() => admissionRequests.id),
   bedId: uuid("bed_id").notNull().references(() => beds.id),
   patientId: uuid("patient_id").references(() => patients.id),
-  score: numeric("score"),                                 // pheromone trail quality
+  score: numeric("score"),                             
   allocatedAt: timestamp("allocated_at").defaultNow().notNull(),
 })
 
@@ -170,26 +146,22 @@ export const allocationLogs = pgTable("allocation_logs", {
 /* ---------------- ACO RUNS ---------------- */
 export const acoRuns = pgTable("aco_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
-
   hospitalId: uuid("hospital_id")
     .notNull()
     .references(() => hospitals.id, { onDelete: "cascade" }),
-
   initiatorUserId: uuid("initiator_user_id")
     .references(() => users.id, { onDelete: "set null" }),
-
   startedAt: timestamp("started_at").defaultNow().notNull(),
   finishedAt: timestamp("finished_at"),
-
-  durationMs: integer("duration_ms"),                 // how long the simulation took
-  iterations: integer("iterations"),                  // number of iterations performed
-  bestScore: numeric("best_score"),                   // final optimization score
-  reservedSlot: integer("reserved_slot"),             // reserved position from algorithm
-  details: jsonb("details"),                           // raw info: {bedsBefore, bedsAfter}
+  durationMs: integer("duration_ms"),               
+  iterations: integer("iterations"),            
+  bestScore: numeric("best_score"),        
+  reservedSlot: integer("reserved_slot"), 
+  details: jsonb("details"),                         
 
   status: varchar("status", { length: 50 })
     .notNull()
-    .default("completed"),                             // running | completed | failed
+    .default("completed"),                         
 
   createdAt: timestamp("created_at").defaultNow().notNull()
 })
@@ -202,13 +174,10 @@ export const acoRunEvents = pgTable("aco_run_events", {
     .notNull()
     .references(() => acoRuns.id, { onDelete: "cascade" }),
 
-  eventType: varchar("event_type", { length: 100 }).notNull(), // iteration_start, iteration_end, convergence, warning, placement, scoring
-  message: text("message"),
-  metadata: jsonb("metadata"),                                 // anything: {iteration: 4, score: 98.2}
-
+  eventType: varchar("event_type", { length: 100 }).notNull(),
+  metadata: jsonb("metadata"),          
   timestamp: timestamp("timestamp").defaultNow().notNull()
 })
-
 
 /* ---------------- TYPES ---------------- */
 export type User = typeof users.$inferSelect

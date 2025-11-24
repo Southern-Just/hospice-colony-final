@@ -1,12 +1,14 @@
-'use client';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { X as CloseIcon, Building2, Loader2 } from 'lucide-react';
-import { useAuth } from '@/components/contexts/AuthContext';
-import { toast } from 'sonner';
-import { HospitalModalBeds } from './HospitalModalBeds';
+// HospitalModal.tsx
+"use client";
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { X as CloseIcon, Building2, Loader2 } from "lucide-react";
+import { useAuth } from "@/components/contexts/AuthContext";
+import { toast } from "sonner";
+import { HospitalModalBeds, HospitalBedsHandle } from "./HospitalModalBeds";
 
 type UserRecord = {
   id: string;
@@ -57,6 +59,7 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
   const [hospitalUsers, setHospitalUsers] = useState<UserRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const bedsRef = useRef<HospitalBedsHandle | null>(null);
 
   useEffect(() => {
     if (hospital) setForm(hospital);
@@ -64,8 +67,8 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
 
   const canEdit = useMemo(() => {
     if (!currentUser || !hospital) return false;
-    if ((currentUser as any).role === 'super_admin') return true;
-    if ((currentUser as any).role === 'admin' && (currentUser as any).hospitalId === hospital.id) return true;
+    if ((currentUser as any).role === "super_admin") return true;
+    if ((currentUser as any).role === "admin" && (currentUser as any).hospitalId === hospital.id) return true;
     return false;
   }, [currentUser, hospital]);
 
@@ -74,12 +77,12 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
     (async () => {
       try {
         setLoadingUsers(true);
-        const res = await fetch(`/api/users?hospitalId=${hospital.id}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load users');
+        const res = await fetch(`/api/users?hospitalId=${hospital.id}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load users");
         const data = await res.json();
         setHospitalUsers(Array.isArray(data.users) ? data.users : []);
       } catch (e: any) {
-        toast.error(e?.message || 'Error loading users');
+        toast.error(e?.message || "Error loading users");
       } finally {
         setLoadingUsers(false);
       }
@@ -102,26 +105,29 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
 
   const handleSave = useCallback(async () => {
     if (!form?.id) {
-      toast.error('Hospital ID missing');
+      toast.error("Hospital ID missing");
       return;
     }
     setSaving(true);
     setSaveError(null);
     try {
+      if (bedsRef.current) {
+        await bedsRef.current.saveChanges();
+      }
       const res = await fetch(`/api/hospitals/${form.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form)
       });
-      if (!res.ok) throw new Error('Failed to update hospital');
+      if (!res.ok) throw new Error("Failed to update hospital");
       const data = await res.json();
       const updated = (data && (data.hospital ?? data)) as HospitalRecord;
       onUpdate?.(updated);
-      toast.success('Hospital details updated');
+      toast.success("Hospital details updated");
       onClose();
     } catch (e: any) {
-      setSaveError(e?.message || 'Failed to update hospital');
-      toast.error(e?.message || 'Failed to update hospital');
+      setSaveError(e?.message || "Failed to update hospital");
+      toast.error(e?.message || "Failed to update hospital");
     } finally {
       setSaving(false);
     }
@@ -139,8 +145,8 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
         <header className="flex items-center space-x-3 mb-6 border-b pb-3">
           <Building2 className="h-8 w-8 text-blue-600" />
           <h2 className="text-2xl font-extrabold text-gray-800 truncate">{hospital.name}</h2>
-          <span className={`text-sm font-medium px-3 py-1 rounded-full ${canEdit ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-            {canEdit ? 'Editable' : 'Read-Only'}
+          <span className={`text-sm font-medium px-3 py-1 rounded-full ${canEdit ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+            {canEdit ? "Editable" : "Read-Only"}
           </span>
         </header>
 
@@ -150,22 +156,22 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 border rounded-lg bg-gray-50">
           {[
-            'phone',
-            'email',
-            'website',
-            'city',
-            'state',
-            'location',
-            'address',
-            'notes'
+            "phone",
+            "email",
+            "website",
+            "city",
+            "state",
+            "location",
+            "address",
+            "notes"
           ].map(field => {
-            const isText = field === 'address' || field === 'notes';
+            const isText = field === "address" || field === "notes";
             const C = isText ? Textarea : Input;
             return (
-              <div key={field} className={isText ? 'col-span-full' : ''}>
+              <div key={field} className={isText ? "col-span-full" : ""}>
                 <label className="text-sm font-medium text-gray-600">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
                 <C
-                  value={(form as any)[field] || ''}
+                  value={(form as any)[field] || ""}
                   disabled={!canEdit}
                   onChange={e => handleChange(field, (e as any).target.value)}
                   className="mt-1"
@@ -176,7 +182,12 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
           })}
         </section>
 
-        <HospitalModalBeds hospitalId={hospital.id} canEdit={canEdit} onWardsChange={handleWardsChange} />
+        <HospitalModalBeds
+          ref={bedsRef}
+          hospitalId={hospital.id}
+          canEdit={canEdit}
+          onWardsChange={handleWardsChange}
+        />
 
         <h3 className="text-xl font-semibold text-blue-600 mb-3 mt-6">Hospital Personnel</h3>
 
@@ -191,8 +202,8 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
               hospitalUsers.map(user => (
                 <li key={user.id} className="flex justify-between items-center text-sm p-1 border-b last:border-b-0">
                   <span className="truncate mr-2">{user.firstName} {user.lastName}</span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                    {String(user.role || '').toUpperCase()}
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${user.role === "admin" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                    {String(user.role || "").toUpperCase()}
                   </span>
                 </li>
               ))
@@ -213,7 +224,7 @@ export function HospitalModal({ hospital, onClose, onUpdate }: Props) {
                     <Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...
                   </>
                 ) : (
-                  'Save Changes'
+                  "Save Changes"
                 )}
               </Button>
             )}
